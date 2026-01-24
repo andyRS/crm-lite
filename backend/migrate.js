@@ -41,9 +41,11 @@ async function runMigrations() {
       `ALTER TABLE Orders ADD COLUMN source ENUM('web', 'phone', 'email', 'in_person', 'api') DEFAULT 'web'`,
       `ALTER TABLE Orders ADD COLUMN metadata JSON`,
 
-      // Agregar campos a OrderItems
-      `ALTER TABLE OrderItems ADD COLUMN taxAmount DECIMAL(10,2) DEFAULT 0`,
-      `ALTER TABLE OrderItems ADD COLUMN discount DECIMAL(10,2) DEFAULT 0`,
+      // Agregar campos de seguridad a Users
+      `ALTER TABLE Users ADD COLUMN failedLoginAttempts INT DEFAULT 0`,
+      `ALTER TABLE Users ADD COLUMN lockedUntil DATETIME NULL`,
+      `ALTER TABLE Users ADD COLUMN lastLogin DATETIME NULL`,
+      `ALTER TABLE Users ADD COLUMN tokenVersion INT DEFAULT 0`,
     ];
 
     for (const query of queries) {

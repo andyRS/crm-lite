@@ -20,6 +20,26 @@ const User = sequelize.define("User", {
     defaultValue: 'user',
     allowNull: false,
   },
+  // Campos de seguridad para protección contra fuerza bruta
+  failedLoginAttempts: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+    allowNull: false,
+  },
+  lockedUntil: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  lastLogin: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  // Campo para invalidar tokens antiguos
+  tokenVersion: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+    allowNull: false,
+  },
 });
 
 module.exports = User;

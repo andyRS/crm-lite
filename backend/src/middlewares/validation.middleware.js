@@ -1,18 +1,36 @@
 const Joi = require('joi');
 
-// Esquemas de validación
+// Función para sanitizar strings (remover caracteres peligrosos)
+const sanitizeString = (value) => {
+  if (typeof value !== 'string') return value;
+  return value
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+\s*=/gi, '')
+    .trim();
+};
+
+// Esquemas de validación con sanitización
 const schemas = {
-  // Validación de usuario
+  // Validación de usuario con contraseña segura
   user: {
     create: Joi.object({
-      name: Joi.string().min(2).max(100).required(),
-      email: Joi.string().email().required(),
-      password: Joi.string().min(6).required(),
+      name: Joi.string().min(2).max(100).required().custom(sanitizeString),
+      email: Joi.string().email().required().custom(sanitizeString),
+      password: Joi.string()
+        .min(8)
+        .max(128)
+        .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+        .required()
+        .messages({
+          'string.pattern.base': 'La contraseña debe contener al menos una letra minúscula, una mayúscula, un número y un carácter especial'
+        }),
       role: Joi.string().valid('admin', 'manager', 'user').default('user')
     }),
     update: Joi.object({
-      name: Joi.string().min(2).max(100),
-      email: Joi.string().email(),
+      name: Joi.string().min(2).max(100).custom(sanitizeString),
+      email: Joi.string().email().custom(sanitizeString),
       role: Joi.string().valid('admin', 'manager', 'user')
     })
   },

@@ -3,22 +3,27 @@ const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 
-const authRoutes = require("./routes/auth.routes");
-const customerRoutes = require("./routes/customer.routes");
-const dashboardRoutes = require("./routes/dashboard.routes");
-const productRoutes = require("./routes/product.routes");
-const categoryRoutes = require("./routes/category.routes");
-const orderRoutes = require("./routes/order.routes");
-const notificationRoutes = require("./routes/notification.routes");
-const quoteRoutes = require("./routes/quote.routes");
-const reportRoutes = require("./routes/report.routes");
-const paymentRoutes = require("./routes/payment.routes");
+const { securityLogger, attackDetection } = require('./middlewares/security.middleware');
 
 const app = express();
 
 // Middlewares de seguridad
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  }
 }));
 
 // Rate limiting
@@ -39,25 +44,113 @@ const authLimiter = rateLimit({
   message: "Demasiados intentos de login, por favor intenta más tarde.",
   standardHeaders: true,
   legacyHeaders: false,
+  skipSuccessfulRequests: true, // No contar requests exitosos
+});
+
+// Rate limiting para creación de recursos
+const createLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 20, // límite de 20 creaciones por windowMs
+  message: "Demasiadas creaciones, por favor intenta más tarde.",
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limiting para endpoints de búsqueda
+const searchLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 50, // límite de 50 búsquedas por windowMs
+  message: "Demasiadas búsquedas, por favor intenta más tarde.",
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/register", createLimiter);
+app.use("/api/users", createLimiter);
+app.use("/api/customers", createLimiter);
+app.use("/api/products", createLimiter);
+app.use("/api/orders", createLimiter);
 
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || "http://localhost:5173",
-  credentials: true
+  origin: function (origin, callback) {
+    // Permitir requests sin origin (como mobile apps o curl)
+    if (!origin) return callback(null, true);
+
+    const allowedOrigins = [
+      'http://localhost:5173',  // Vite dev server
+      'http://localhost:3000',  // React dev server
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:3000'
+    ];
+
+    // En producción, verificar que el origen esté en la lista permitida
+    if (process.env.NODE_ENV === 'production') {
+      // Solo permitir dominios específicos en producción
+      const isAllowed = allowedOrigins.some(allowed => origin.startsWith(allowed.split(':')[1]));
+      if (isAllowed) {
+        return callback(null, true);
+      } else {
+        return callback(new Error('Not allowed by CORS'));
+      }
+    }
+
+    // En desarrollo, permitir localhost
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Sanitización básica de inputs
+// Middlewares de seguridad y logging
+app.use(securityLogger);
+app.use(attackDetection);
+
+// Sanitización avanzada de inputs (prevención XSS)
 app.use((req, res, next) => {
-  for (const key in req.body) {
-    if (typeof req.body[key] === 'string') {
-      req.body[key] = req.body[key].trim();
+  // Función para sanitizar strings
+  const sanitizeString = (str) => {
+    if (typeof str !== 'string') return str;
+    return str
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/<[^>]*>/g, '')
+      .replace(/javascript:/gi, '')
+      .replace(/on\w+\s*=/gi, '')
+      .replace(/vbscript:/gi, '')
+      .replace(/data:text\/html/gi, '')
+      .trim();
+  };
+
+  // Función para sanitizar objetos recursivamente
+  const sanitizeObject = (obj) => {
+    for (const key in obj) {
+      if (typeof obj[key] === 'string') {
+        obj[key] = sanitizeString(obj[key]);
+      } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+        sanitizeObject(obj[key]);
+      }
     }
+  };
+
+  // Sanitizar body, query y params
+  if (req.body && typeof req.body === 'object') {
+    sanitizeObject(req.body);
   }
+  if (req.query && typeof req.query === 'object') {
+    sanitizeObject(req.query);
+  }
+  if (req.params && typeof req.params === 'object') {
+    sanitizeObject(req.params);
+  }
+
   next();
 });
 
