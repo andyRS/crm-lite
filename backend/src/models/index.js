@@ -1,7 +1,81 @@
 const User = require("./user.model");
 const Customer = require("./customer.model");
+const Category = require("./category.model");
+const Product = require("./product.model");
+const Order = require("./order.model");
+const OrderItem = require("./orderItem.model");
+const Notification = require("./notification.model");
+const Quote = require("./quote.model");
+const QuoteItem = require("./quoteItem.model");
+const PaymentMethod = require("./paymentMethod.model");
+const Payment = require("./payment.model");
+const PaymentTransaction = require("./paymentTransaction.model");
 
+// Relaciones existentes
 User.hasMany(Customer, { foreignKey: "user_id" });
 Customer.belongsTo(User, { foreignKey: "user_id" });
 
-module.exports = { User, Customer };
+// Relaciones de productos
+Category.hasMany(Product, { foreignKey: "category_id" });
+Product.belongsTo(Category, { foreignKey: "category_id" });
+
+// Relaciones de pedidos
+Customer.hasMany(Order, { foreignKey: "customer_id" });
+Order.belongsTo(Customer, { foreignKey: "customer_id" });
+
+User.hasMany(Order, { foreignKey: "user_id" });
+Order.belongsTo(User, { foreignKey: "user_id" });
+
+Order.hasMany(OrderItem, { foreignKey: "order_id" });
+OrderItem.belongsTo(Order, { foreignKey: "order_id" });
+
+Product.hasMany(OrderItem, { foreignKey: "product_id" });
+OrderItem.belongsTo(Product, { foreignKey: "product_id" });
+
+// Relaciones de notificaciones
+User.hasMany(Notification, { foreignKey: "userId" });
+Notification.belongsTo(User, { foreignKey: "userId" });
+
+// Relaciones de cotizaciones
+User.hasMany(Quote, { foreignKey: "userId" });
+Quote.belongsTo(User, { foreignKey: "userId" });
+
+Customer.hasMany(Quote, { foreignKey: "customerId" });
+Quote.belongsTo(Customer, { foreignKey: "customerId" });
+
+Quote.hasMany(QuoteItem, { foreignKey: "quoteId" });
+QuoteItem.belongsTo(Quote, { foreignKey: "quoteId" });
+
+Product.hasMany(QuoteItem, { foreignKey: "productId" });
+QuoteItem.belongsTo(Product, { foreignKey: "productId" });
+
+// Relaciones de pagos
+Customer.hasMany(PaymentMethod, { foreignKey: "customer_id" });
+PaymentMethod.belongsTo(Customer, { foreignKey: "customer_id" });
+
+Order.hasMany(Payment, { foreignKey: "order_id" });
+Payment.belongsTo(Order, { foreignKey: "order_id" });
+
+PaymentMethod.hasMany(Payment, { foreignKey: "paymentMethod_id" });
+Payment.belongsTo(PaymentMethod, { foreignKey: "paymentMethod_id" });
+
+Payment.hasMany(PaymentTransaction, { foreignKey: "payment_id" });
+PaymentTransaction.belongsTo(Payment, { foreignKey: "payment_id" });
+
+User.hasMany(Payment, { foreignKey: "processedBy_id" });
+Payment.belongsTo(User, { foreignKey: "processedBy_id" });
+
+module.exports = {
+  User,
+  Customer,
+  Category,
+  Product,
+  Order,
+  OrderItem,
+  Notification,
+  Quote,
+  QuoteItem,
+  PaymentMethod,
+  Payment,
+  PaymentTransaction
+};

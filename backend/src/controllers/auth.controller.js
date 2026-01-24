@@ -10,7 +10,7 @@ const { User } = require("../models");
  */
 exports.register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role } = req.body;
 
     // 🔐 Validaciones básicas
     if (!name || !email || !password) {
@@ -33,6 +33,7 @@ exports.register = async (req, res) => {
       name,
       email,
       password: hashed,
+      role: role || 'user', // default to user if not provided
     });
 
     // ✅ RESPUESTA SEGURA (SIN PASSWORD)
@@ -40,6 +41,7 @@ exports.register = async (req, res) => {
       id: user.id,
       name: user.name,
       email: user.email,
+      role: user.role,
       createdAt: user.createdAt,
     });
   } catch (error) {
@@ -75,7 +77,7 @@ exports.login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user.id },
+      { id: user.id, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: "1d" }
     );
@@ -86,6 +88,7 @@ exports.login = async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
+        role: user.role,
       },
     });
   } catch (error) {
