@@ -17,7 +17,7 @@ export default defineConfig({
   },
   build: {
     // Configuración de build segura
-    minify: 'terser',
+    minify: 'esbuild',
     terserOptions: {
       compress: {
         drop_console: true, // Remover console.logs en producción
