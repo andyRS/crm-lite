@@ -22,11 +22,33 @@ const stripeRoutes = require('./routes/stripe.routes');
 
 const app = express();
 
-// CORS Habilitado - Permitir múltiples puertos de desarrollo
+// CORS Habilitado - Permitir múltiples puertos de desarrollo y producción
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174', 
+  'http://localhost:5175',
+  'https://crm-lite-six.vercel.app',
+  'https://crm-lite-git-master-andy-rosados-projects.vercel.app'
+];
+
+// Agregar FRONTEND_URL de variables de entorno si existe
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
+}
+
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
+  origin: function(origin, callback) {
+    // Permitir requests sin origin (como mobile apps o curl)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.includes('vercel.app')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
