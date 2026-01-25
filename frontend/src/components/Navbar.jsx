@@ -1,38 +1,31 @@
 import { Link, useNavigate } from "react-router-dom";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import { BellIcon } from "@heroicons/react/24/outline";
-import { jwtDecode } from "jwt-decode";
 import api from "../api/axios";
+import { AuthContext } from "../context/AuthContext";
 
 export default function Navbar() {
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
-  const [user, setUser] = useState(null);
+  const { user, logout: contextLogout } = useContext(AuthContext);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      try {
-        const decoded = jwtDecode(token);
-        setUser(decoded);
-        loadUnreadNotifications();
-      } catch (err) {
-        console.error("Error decoding token:", err);
-      }
+    if (user) {
+      loadUnreadNotifications();
     }
-  }, []);
+  }, [user]);
 
   const loadUnreadNotifications = async () => {
     try {
       const res = await api.get("/notifications/unread-count");
       setUnreadCount(res.data.count);
     } catch (err) {
-      console.error("Error loading unread count:", err);
+      console.error("Error al cargar contador de no leídos:", err);
     }
   };
 
   const logout = () => {
-    localStorage.removeItem("token");
+    contextLogout();
     navigate("/login");
   };
 
@@ -47,6 +40,7 @@ export default function Navbar() {
         <Link to="/customers" className="hover:text-indigo-400">Clientes</Link>
         <Link to="/products" className="hover:text-indigo-400">Productos</Link>
         <Link to="/orders" className="hover:text-indigo-400">Pedidos</Link>
+        <Link to="/invoices" className="hover:text-indigo-400">Facturación</Link>
         <Link to="/quotes" className="hover:text-indigo-400">Cotizaciones</Link>
         <Link to="/reports" className="hover:text-indigo-400">Reportes</Link>
 

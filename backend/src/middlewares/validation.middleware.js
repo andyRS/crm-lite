@@ -39,8 +39,13 @@ const schemas = {
   customer: {
     create: Joi.object({
       name: Joi.string().min(2).max(100).required(),
+      lastName: Joi.string().min(2).max(100).required(),
+      cedula: Joi.string().pattern(/^[0-9]{11}$/).required().messages({
+        'string.pattern.base': 'La cédula debe tener exactamente 11 dígitos numéricos'
+      }),
       email: Joi.string().email().required(),
-      phone: Joi.string().pattern(/^[\+]?[1-9][\d]{0,15}$/),
+      phone: Joi.string().pattern(/^[\+]?[1-9][\d]{0,15}$/).required(),
+      address: Joi.string().required(),
       billingAddress: Joi.string(),
       taxId: Joi.string(),
       creditLimit: Joi.number().min(0).default(0),
@@ -48,8 +53,13 @@ const schemas = {
     }),
     update: Joi.object({
       name: Joi.string().min(2).max(100),
+      lastName: Joi.string().min(2).max(100),
+      cedula: Joi.string().pattern(/^[0-9]{11}$/).messages({
+        'string.pattern.base': 'La cédula debe tener exactamente 11 dígitos numéricos'
+      }),
       email: Joi.string().email(),
       phone: Joi.string().pattern(/^[\+]?[1-9][\d]{0,15}$/),
+      address: Joi.string(),
       billingAddress: Joi.string(),
       taxId: Joi.string(),
       creditLimit: Joi.number().min(0),
@@ -78,17 +88,21 @@ const schemas = {
       allowBackorders: Joi.boolean().default(false)
     }),
     update: Joi.object({
-      name: Joi.string().min(2).max(200),
-      description: Joi.string(),
-      price: Joi.number().min(0),
-      cost: Joi.number().min(0),
-      stock: Joi.number().integer().min(0),
-      minStock: Joi.number().integer().min(0),
+      id: Joi.number().integer().required(),
+      name: Joi.string().min(2).max(200).required(),
+      description: Joi.string().allow(''),
+      price: Joi.number().min(0).required(),
+      cost: Joi.number().min(0).required(),
+      stock: Joi.number().integer().min(0).required(),
+      minStock: Joi.number().integer().min(0).required(),
       maxStock: Joi.number().integer().min(0),
-      sku: Joi.string().min(3).max(50),
-      barcode: Joi.string(),
-      weight: Joi.number().min(0),
-      category_id: Joi.number().integer(),
+      sku: Joi.string().min(3).max(50).required(),
+      barcode: Joi.string().allow('', null),
+      weight: Joi.number().min(0).allow(null),
+      category_id: Joi.alternatives().try(
+        Joi.number().integer(),
+        Joi.string().pattern(/^\d+$/).custom((value) => parseInt(value))
+      ).required(),
       taxable: Joi.boolean(),
       taxRate: Joi.number().min(0).max(100),
       trackInventory: Joi.boolean(),
@@ -155,13 +169,22 @@ const schemas = {
 // Middleware de validación
 const validate = (schema) => {
   return (req, res, next) => {
+    console.log('=== VALIDATING REQUEST ===');
+    console.log('Method:', req.method);
+    console.log('URL:', req.url);
+    console.log('Body:', JSON.stringify(req.body, null, 2));
+    
     const { error } = schema.validate(req.body, { abortEarly: false });
 
     if (error) {
-      const errors = error.details.map(detail => ({
-        field: detail.path.join('.'),
-        message: detail.message
-      }));
+      console.log('❌ VALIDATION FAILED:');
+      const errors = error.details.map(detail => {
+        console.log(`  - Field: ${detail.path.join('.')}, Message: ${detail.message}`);
+        return {
+          field: detail.path.join('.'),
+          message: detail.message
+        };
+      });
 
       return res.status(400).json({
         msg: 'Datos de entrada inválidos',
@@ -169,6 +192,7 @@ const validate = (schema) => {
       });
     }
 
+    console.log('✅ VALIDATION PASSED');
     next();
   };
 };

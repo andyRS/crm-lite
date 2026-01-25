@@ -9,15 +9,34 @@ const sequelize = new Sequelize(
     port: process.env.DB_PORT,
     dialect: "mysql",
     logging: false,
+    pool: {
+      max: 10,
+      min: 0,
+      acquire: 60000,
+      idle: 10000,
+      evict: 1000
+    },
+    dialectOptions: {
+      connectTimeout: 60000,
+      decimalNumbers: true
+    },
+    retry: {
+      max: 3
+    },
+    define: {
+      timestamps: true,
+      underscored: false,
+      freezeTableName: false
+    }
   }
 );
 
 const connectDB = async () => {
   try {
     await sequelize.authenticate();
-    console.log("✅ MySQL conectado");
+    // Silencioso - el mensaje se mostrará en server.js
   } catch (error) {
-    console.error("❌ Error MySQL:", error.message);
+    console.error("❌ Error al conectar con MySQL:", error.message);
     process.exit(1);
   }
 };

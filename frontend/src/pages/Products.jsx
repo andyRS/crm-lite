@@ -33,7 +33,7 @@ export default function Products() {
       const res = await api.get("/products");
       setProducts(res.data);
     } catch (err) {
-      console.error("Error loading products:", err);
+      console.error("Error al cargar productos:", err);
     } finally {
       setLoading(false);
     }
@@ -44,7 +44,7 @@ export default function Products() {
       const res = await api.get("/categories");
       setCategories(res.data);
     } catch (err) {
-      console.error("Error loading categories:", err);
+      console.error("Error al cargar categorías:", err);
     }
   };
 
@@ -87,7 +87,7 @@ export default function Products() {
       setShowModal(false);
       loadProducts();
     } catch (err) {
-      console.error("Error saving product:", err);
+      console.error("Error al guardar producto:", err);
     } finally {
       setLoading(false);
     }
@@ -114,7 +114,7 @@ export default function Products() {
         await api.delete(`/products/${id}`);
         loadProducts();
       } catch (err) {
-        console.error("Error deleting product:", err);
+        console.error("Error al eliminar producto:", err);
       }
     }
   };
@@ -185,7 +185,7 @@ export default function Products() {
                       Producto
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      SKU
+                      Código
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Precio
@@ -215,7 +215,9 @@ export default function Products() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-500">{product.sku || "N/A"}</div>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-sm font-medium bg-indigo-100 text-indigo-800">
+                          {product.sku || "Sin código"}
+                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">${product.price}</div>
@@ -290,14 +292,15 @@ export default function Products() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      SKU
+                      Código del Producto *
                     </label>
                     <input
                       type="text"
-                      placeholder="Código SKU"
+                      placeholder="Código del producto"
                       value={form.sku}
                       onChange={(e) => setForm({ ...form, sku: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      required
                     />
                   </div>
                 </div>

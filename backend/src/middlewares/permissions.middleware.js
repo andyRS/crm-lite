@@ -21,7 +21,7 @@ const permissions = {
     reports: ['read']
   },
   user: {
-    customers: ['read', 'update'], // Solo sus propios clientes
+    customers: ['create', 'read', 'update'], // Solo sus propios clientes
     products: ['read'],
     orders: ['create', 'read'], // Solo sus propias órdenes
     quotes: ['create', 'read'], // Solo sus propias cotizaciones

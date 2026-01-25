@@ -12,11 +12,13 @@ exports.getAll = async (req, res) => {
 
     const orders = await Order.findAll({
       where: whereClause,
+      attributes: ['id', 'orderNumber', 'status', 'paymentStatus', 'subtotal', 'taxAmount', 'discountAmount', 'total', 'notes', 'orderDate', 'deliveryDate', 'createdAt', 'updatedAt', 'customer_id', 'user_id'],
       include: [
-        { model: Customer, attributes: ['name', 'email', 'creditLimit', 'currentDebt'] },
-        { model: User, attributes: ['name'] },
+        { model: Customer, attributes: ['name', 'email', 'creditLimit', 'currentDebt'], required: false },
+        { model: User, attributes: ['name'], required: false },
         {
           model: OrderItem,
+          attributes: ['id', 'quantity', 'price', 'total'],
           include: [{ model: Product, attributes: ['name', 'price', 'sku'] }]
         }
       ],
@@ -155,7 +157,7 @@ exports.create = async (req, res) => {
 
     const orderWithDetails = await Order.findByPk(order.id, {
       include: [
-        { model: Customer, attributes: ['name', 'email', 'creditLimit', 'currentDebt'] },
+        { model: Customer, attributes: ['name', 'email', 'creditLimit', 'currentDebt'], required: false },
         {
           model: OrderItem,
           include: [{ model: Product, attributes: ['name', 'price', 'sku'] }]
@@ -227,7 +229,7 @@ exports.update = async (req, res) => {
 
     const updatedOrder = await Order.findByPk(id, {
       include: [
-        { model: Customer, attributes: ['name', 'email'] },
+        { model: Customer, attributes: ['name', 'email'], required: false },
         {
           model: OrderItem,
           include: [{ model: Product, attributes: ['name', 'price'] }]

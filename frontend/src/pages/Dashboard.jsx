@@ -83,7 +83,7 @@ export default function Dashboard() {
       setChartData(chartsRes.data);
       setRecentNotifications(notificationsRes.data);
     } catch (err) {
-      console.error("Error loading dashboard data:", err);
+      console.error("Error al cargar datos del dashboard:", err);
     } finally {
       setLoading(false);
     }
@@ -94,7 +94,7 @@ export default function Dashboard() {
       const res = await api.get("/notifications?limit=5");
       setRecentNotifications(res.data);
     } catch (err) {
-      console.error("Error loading notifications:", err);
+      console.error("Error al cargar notificaciones:", err);
     }
   };
 

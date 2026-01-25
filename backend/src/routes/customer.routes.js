@@ -9,6 +9,8 @@ const { checkPermission } = require("../middlewares/permissions.middleware");
 // Rutas protegidas con validaciones y permisos
 router.get("/", auth, customerController.getAll);
 
+router.get("/:id/details", auth, customerController.getDetails);
+
 router.post("/",
   auth,
   validate(require("../middlewares/validation.middleware").schemas.customer.create),

@@ -185,15 +185,21 @@ exports.login = async (req, res) => {
       return res.status(401).json({ msg: "Credenciales inválidas" });
     }
 
-    // Login exitoso - resetear contador de intentos fallidos
-    await user.update({
+    // Login exitoso - resetear contador de intentos fallidos (sin esperar)
+    user.update({
       failedLoginAttempts: 0,
       lockedUntil: null,
       lastLogin: new Date()
+    }).catch(err => {
+      console.error('Error actualizando lastLogin:', err.message);
     });
 
     const token = jwt.sign(
-      { id: user.id, role: user.role },
+      { 
+        id: user.id, 
+        role: user.role,
+        tokenVersion: user.tokenVersion || 0
+      },
       process.env.JWT_SECRET,
       { expiresIn: process.env.SESSION_TIMEOUT || "1d" }
     );

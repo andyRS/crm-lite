@@ -77,7 +77,7 @@ export const AuthProvider = ({ children }) => {
         // Opcional: mostrar notificación al usuario
         alert("Tu sesión ha expirado. Por favor inicia sesión nuevamente.");
       } else if (isTokenExpiringSoon(token)) {
-        console.log("Token expirará pronto");
+        console.log("El token expirará pronto");
         // Aquí podrías implementar renovación automática de token
         // refreshToken();
       }

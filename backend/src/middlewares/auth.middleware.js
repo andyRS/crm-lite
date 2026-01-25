@@ -24,8 +24,11 @@ const authMiddleware = async (req, res, next) => {
     }
 
     // Verificar si el token ha sido invalidado (por cambio de contraseña o logout)
-    if (user.tokenVersion !== decoded.tokenVersion) {
-      return res.status(401).json({ msg: "Token inválido - por favor inicia sesión nuevamente" });
+    // Solo verificar si ambos tienen tokenVersion definido
+    if (typeof user.tokenVersion === 'number' && typeof decoded.tokenVersion === 'number') {
+      if (user.tokenVersion !== decoded.tokenVersion) {
+        return res.status(401).json({ msg: "Token inválido - por favor inicia sesión nuevamente" });
+      }
     }
 
     // Verificar si la cuenta está bloqueada

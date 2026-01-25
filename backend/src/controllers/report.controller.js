@@ -43,6 +43,16 @@ exports.getSalesReport = async (req, res) => {
     const totalOrders = await Order.count({ where: { ...dateFilter, status: 'delivered' } });
     const avgOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
 
+    // Clientes activos únicos (con al menos una orden entregada en el período)
+    const activeCustomers = await Order.findAll({
+      where: { ...dateFilter, status: 'delivered' },
+      attributes: [
+        [require('sequelize').fn('COUNT', require('sequelize').fn('DISTINCT', require('sequelize').col('customer_id'))), 'count']
+      ],
+      raw: true
+    });
+    const totalActiveCustomers = activeCustomers[0]?.count || 0;
+
     // Ventas por categoría
     const salesByCategory = await OrderItem.findAll({
       include: [
@@ -54,21 +64,14 @@ exports.getSalesReport = async (req, res) => {
         {
           model: Product,
           include: [Category],
-          attributes: []
+          attributes: ['name']
         }
       ],
       attributes: [
         [require('sequelize').fn('SUM', require('sequelize').col('OrderItem.total')), 'total'],
         [require('sequelize').fn('SUM', require('sequelize').col('OrderItem.quantity')), 'quantity']
       ],
-      include: [
-        {
-          model: Product,
-          include: [Category],
-          attributes: ['name']
-        }
-      ],
-      group: ['Product.category_id', 'Product.id', 'Category.id'],
+      group: ['Product.id', 'Product.category_id', 'Product->Category.id'],
       raw: true
     });
 
@@ -83,29 +86,75 @@ exports.getSalesReport = async (req, res) => {
         { model: Product, attributes: ['name'] }
       ],
       attributes: [
-        'productId',
-        [require('sequelize').fn('SUM', require('sequelize').col('quantity')), 'totalQuantity'],
-        [require('sequelize').fn('SUM', require('sequelize').col('total')), 'totalRevenue']
+        'product_id',
+        [require('sequelize').fn('SUM', require('sequelize').col('OrderItem.quantity')), 'totalQuantity'],
+        [require('sequelize').fn('SUM', require('sequelize').col('OrderItem.total')), 'totalRevenue']
       ],
-      group: ['productId', 'Product.id'],
-      order: [[require('sequelize').fn('SUM', require('sequelize').col('quantity')), 'DESC']],
+      group: ['product_id', 'Product.id'],
+      order: [[require('sequelize').fn('SUM', require('sequelize').col('OrderItem.quantity')), 'DESC']],
       limit: 10
     });
 
-    // Clientes más activos
-    const topCustomers = await Order.findAll({
+    // Clientes más activos con detalles - primero obtener agregaciones
+    const topCustomersRaw = await Order.findAll({
+      where: { ...dateFilter, status: 'delivered' },
+      attributes: [
+        'customer_id',
+        [require('sequelize').fn('COUNT', require('sequelize').col('Order.id')), 'orderCount'],
+        [require('sequelize').fn('SUM', require('sequelize').col('Order.total')), 'totalSpent'],
+        [require('sequelize').fn('AVG', require('sequelize').col('Order.total')), 'avgOrderValue'],
+        [require('sequelize').fn('MAX', require('sequelize').col('Order.createdAt')), 'lastPurchase']
+      ],
+      group: ['customer_id'],
+      order: [[require('sequelize').fn('SUM', require('sequelize').col('Order.total')), 'DESC']],
+      limit: 10,
+      raw: true
+    });
+
+    // Obtener los IDs de los clientes
+    const customerIds = topCustomersRaw.map(row => row.customer_id).filter(id => id !== null);
+    
+    // Buscar los datos de los clientes
+    const customers = await Customer.findAll({
+      where: { id: customerIds },
+      attributes: ['id', 'name', 'email', 'phone', 'address'],
+      raw: true
+    });
+
+    // Crear un mapa de clientes por ID
+    const customerMap = {};
+    customers.forEach(customer => {
+      customerMap[customer.id] = customer;
+    });
+
+    // Combinar datos de agregación con datos de clientes
+    const topCustomers = topCustomersRaw.map(row => {
+      const customer = customerMap[row.customer_id] || {};
+      return {
+        customer_id: row.customer_id,
+        orderCount: parseInt(row.orderCount) || 0,
+        totalSpent: parseFloat(row.totalSpent) || 0,
+        avgOrderValue: parseFloat(row.avgOrderValue) || 0,
+        lastPurchase: row.lastPurchase,
+        Customer: customer
+      };
+    });
+
+    // Distribución de compras por cliente (para gráfico)
+    const customerDistribution = await Order.findAll({
       where: { ...dateFilter, status: 'delivered' },
       include: [
-        { model: Customer, attributes: ['name', 'email'] }
+        { model: Customer, attributes: ['name'] }
       ],
       attributes: [
-        'customerId',
-        [require('sequelize').fn('COUNT', require('sequelize').col('Order.id')), 'orderCount'],
-        [require('sequelize').fn('SUM', require('sequelize').col('total')), 'totalSpent']
+        'customer_id',
+        [require('sequelize').fn('COUNT', require('sequelize').col('Order.id')), 'orders'],
+        [require('sequelize').fn('SUM', require('sequelize').col('Order.total')), 'total']
       ],
-      group: ['customerId', 'Customer.id'],
-      order: [[require('sequelize').fn('SUM', require('sequelize').col('total')), 'DESC']],
-      limit: 10
+      group: ['customer_id', 'Customer.id'],
+      order: [[require('sequelize').fn('SUM', require('sequelize').col('Order.total')), 'DESC']],
+      limit: 10,
+      raw: true
     });
 
     res.json({
@@ -113,11 +162,13 @@ exports.getSalesReport = async (req, res) => {
       summary: {
         totalSales,
         totalOrders,
-        avgOrderValue: Math.round(avgOrderValue * 100) / 100
+        avgOrderValue: Math.round(avgOrderValue * 100) / 100,
+        totalActiveCustomers
       },
       salesByCategory,
       topProducts,
-      topCustomers
+      topCustomers,
+      customerDistribution
     });
   } catch (error) {
     console.error("Error getting sales report:", error);
@@ -172,18 +223,34 @@ exports.getDashboardCharts = async (req, res) => {
     const productSalesData = await OrderItem.findAll({
       include: [{ model: Product, attributes: ['name'] }],
       attributes: [
-        'productId',
+        'product_id',
         [require('sequelize').fn('SUM', require('sequelize').col('quantity')), 'quantity']
       ],
-      group: ['productId', 'Product.id'],
+      group: ['product_id', 'Product.id'],
       order: [[require('sequelize').fn('SUM', require('sequelize').col('quantity')), 'DESC']],
       limit: 5
+    });
+
+    // Top 5 clientes por facturación
+    const customerSalesData = await Order.findAll({
+      where: { status: 'delivered' },
+      include: [{ model: Customer, attributes: ['name'] }],
+      attributes: [
+        'customer_id',
+        [require('sequelize').fn('SUM', require('sequelize').col('Order.total')), 'total'],
+        [require('sequelize').fn('COUNT', require('sequelize').col('Order.id')), 'orders']
+      ],
+      group: ['customer_id', 'Customer.id'],
+      order: [[require('sequelize').fn('SUM', require('sequelize').col('Order.total')), 'DESC']],
+      limit: 5,
+      raw: true
     });
 
     res.json({
       salesChart: salesData,
       orderStatusChart: orderStatusData,
-      productSalesChart: productSalesData
+      productSalesChart: productSalesData,
+      customerSalesChart: customerSalesData
     });
   } catch (error) {
     console.error("Error getting dashboard charts:", error);

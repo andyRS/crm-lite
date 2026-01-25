@@ -43,7 +43,7 @@ export default function Notifications() {
       const res = await api.get("/notifications");
       setNotifications(res.data);
     } catch (err) {
-      console.error("Error loading notifications:", err);
+      console.error("Error al cargar notificaciones:", err);
       toast.error("Error al cargar notificaciones");
     } finally {
       setLoading(false);
@@ -55,7 +55,7 @@ export default function Notifications() {
       const res = await api.get("/notifications/unread-count");
       setUnreadCount(res.data.count);
     } catch (err) {
-      console.error("Error loading unread count:", err);
+      console.error("Error al cargar contador de no leídos:", err);
     }
   };
 
@@ -68,7 +68,7 @@ export default function Notifications() {
       setUnreadCount(Math.max(0, unreadCount - 1));
       toast.success("Notificación marcada como leída");
     } catch (err) {
-      console.error("Error marking notification as read:", err);
+      console.error("Error al marcar notificación como leída:", err);
       toast.error("Error al marcar notificación");
     }
   };
@@ -80,7 +80,7 @@ export default function Notifications() {
       setUnreadCount(0);
       toast.success("Todas las notificaciones marcadas como leídas");
     } catch (err) {
-      console.error("Error marking all notifications as read:", err);
+      console.error("Error al marcar todas las notificaciones como leídas:", err);
       toast.error("Error al marcar notificaciones");
     }
   };

@@ -10,6 +10,8 @@ const QuoteItem = require("./quoteItem.model");
 const PaymentMethod = require("./paymentMethod.model");
 const Payment = require("./payment.model");
 const PaymentTransaction = require("./paymentTransaction.model");
+const Invoice = require("./invoice.model");
+const InvoiceItem = require("./invoiceItem.model");
 
 // Relaciones existentes
 User.hasMany(Customer, { foreignKey: "user_id" });
@@ -65,6 +67,22 @@ PaymentTransaction.belongsTo(Payment, { foreignKey: "payment_id" });
 User.hasMany(Payment, { foreignKey: "processedBy_id" });
 Payment.belongsTo(User, { foreignKey: "processedBy_id" });
 
+// Relaciones de facturas
+Customer.hasMany(Invoice, { foreignKey: "customer_id" });
+Invoice.belongsTo(Customer, { foreignKey: "customer_id" });
+
+User.hasMany(Invoice, { foreignKey: "user_id" });
+Invoice.belongsTo(User, { foreignKey: "user_id" });
+
+Order.hasOne(Invoice, { foreignKey: "order_id" });
+Invoice.belongsTo(Order, { foreignKey: "order_id" });
+
+Invoice.hasMany(InvoiceItem, { foreignKey: "invoice_id" });
+InvoiceItem.belongsTo(Invoice, { foreignKey: "invoice_id" });
+
+Product.hasMany(InvoiceItem, { foreignKey: "product_id" });
+InvoiceItem.belongsTo(Product, { foreignKey: "product_id" });
+
 module.exports = {
   User,
   Customer,
@@ -77,5 +95,7 @@ module.exports = {
   QuoteItem,
   PaymentMethod,
   Payment,
-  PaymentTransaction
+  PaymentTransaction,
+  Invoice,
+  InvoiceItem
 };

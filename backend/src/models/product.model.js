@@ -50,8 +50,12 @@ const Product = sequelize.define("Product", {
   sku: {
     type: DataTypes.STRING,
     unique: true,
+    allowNull: true,
     validate: {
-      len: [3, 50]
+      len: {
+        args: [3, 50],
+        msg: "El SKU debe tener entre 3 y 50 caracteres"
+      }
     }
   },
   barcode: {

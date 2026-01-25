@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import api from "../api/axios";
 import { useNavigate } from "react-router-dom";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
+import { AuthContext } from "../context/AuthContext";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -10,12 +11,12 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login, user } = useContext(AuthContext);
 
   // 🔐 Si ya hay token, no debe ver login
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) navigate("/");
-  }, [navigate]);
+    if (user) navigate("/");
+  }, [user, navigate]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -30,10 +31,10 @@ export default function Login() {
 
     try {
       const res = await api.post("/auth/login", { email, password });
-      localStorage.setItem("token", res.data.token);
+      login(res.data.token);
       navigate("/");
     } catch (err) {
-      setError("Credenciales incorrectas");
+      setError(err.response?.data?.msg || "Credenciales incorrectas");
       setLoading(false);
     }
   };

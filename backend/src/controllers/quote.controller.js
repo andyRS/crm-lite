@@ -1,5 +1,15 @@
 const { Quote, QuoteItem, Customer, Product, User, Notification } = require("../models");
 const { createNotification } = require("./notification.controller");
+const companyConfig = require("../config/company");
+
+exports.getCompanyInfo = async (req, res) => {
+  try {
+    res.json(companyConfig);
+  } catch (error) {
+    console.error("Error getting company info:", error);
+    res.status(500).json({ msg: "Error al obtener información de la empresa" });
+  }
+};
 
 exports.getAll = async (req, res) => {
   try {
@@ -13,7 +23,7 @@ exports.getAll = async (req, res) => {
     const quotes = await Quote.findAll({
       where: whereClause,
       include: [
-        { model: Customer, attributes: ['name', 'email'] },
+        { model: Customer, attributes: ['name', 'email'], required: false },
         { model: User, attributes: ['name'] },
         {
           model: QuoteItem,
@@ -31,7 +41,12 @@ exports.getAll = async (req, res) => {
 
 exports.create = async (req, res) => {
   try {
-    const { customerId, items, validUntil, notes, discount = 0 } = req.body;
+    const { customerId, items, validUntil, notes, discount = 0, clientName, clientEmail, clientPhone, clientCompany } = req.body;
+
+    // Validar que al menos haya un cliente (registrado o datos del cliente nuevo)
+    if (!customerId && !clientName) {
+      return res.status(400).json({ msg: "Debes seleccionar un cliente registrado o proporcionar datos del cliente" });
+    }
 
     // Generar número de cotización único
     const quoteNumber = `QT-${Date.now()}`;
@@ -52,12 +67,16 @@ exports.create = async (req, res) => {
     // Crear cotización
     const quote = await Quote.create({
       quoteNumber,
-      customerId,
+      customerId: customerId || null,
       userId: req.user.id,
       total,
       validUntil,
       notes,
-      discount
+      discount,
+      clientName: clientName || null,
+      clientEmail: clientEmail || null,
+      clientPhone: clientPhone || null,
+      clientCompany: clientCompany || null
     });
 
     // Crear items de cotización
@@ -74,7 +93,7 @@ exports.create = async (req, res) => {
 
     const quoteWithDetails = await Quote.findByPk(quote.id, {
       include: [
-        { model: Customer, attributes: ['name', 'email'] },
+        { model: Customer, attributes: ['name', 'email'], required: false },
         {
           model: QuoteItem,
           include: [{ model: Product, attributes: ['name', 'price'] }]
@@ -83,10 +102,11 @@ exports.create = async (req, res) => {
     });
 
     // Crear notificación
+    const clientNameForNotification = quoteWithDetails.Customer?.name || clientName || 'Cliente';
     await createNotification(
       req.user.id,
       'Nueva Cotización Creada',
-      `Cotización ${quoteNumber} creada para ${quoteWithDetails.Customer.name}`,
+      `Cotización ${quoteNumber} creada para ${clientNameForNotification}`,
       'success',
       quote.id,
       'quote'
@@ -119,7 +139,7 @@ exports.update = async (req, res) => {
 
     const updatedQuote = await Quote.findByPk(id, {
       include: [
-        { model: Customer, attributes: ['name', 'email'] },
+        { model: Customer, attributes: ['name', 'email'], required: false },
         {
           model: QuoteItem,
           include: [{ model: Product, attributes: ['name', 'price'] }]
@@ -201,5 +221,37 @@ exports.convertToOrder = async (req, res) => {
   } catch (error) {
     console.error("Error converting quote to order:", error);
     res.status(500).json({ message: "Error convirtiendo cotización a orden" });
+  }
+};
+
+exports.delete = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const quote = await Quote.findByPk(id);
+
+    if (!quote) {
+      return res.status(404).json({ msg: "Cotización no encontrada" });
+    }
+
+    // Verificar permisos: solo admin o el usuario que creó la cotización puede eliminarla
+    if (req.user.role !== 'admin' && quote.userId !== req.user.id) {
+      return res.status(403).json({ msg: "No tienes permisos para eliminar esta cotización" });
+    }
+
+    // Verificar que la cotización no esté aprobada o convertida a orden
+    if (quote.status === 'approved') {
+      return res.status(400).json({ msg: "No se puede eliminar una cotización aprobada o convertida a orden" });
+    }
+
+    // Eliminar items de la cotización primero
+    await QuoteItem.destroy({ where: { quoteId: id } });
+
+    // Eliminar la cotización
+    await quote.destroy();
+
+    res.json({ msg: "Cotización eliminada exitosamente" });
+  } catch (error) {
+    console.error("Error deleting quote:", error);
+    res.status(500).json({ msg: "Error al eliminar cotización" });
   }
 };
