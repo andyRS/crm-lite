@@ -1,5 +1,6 @@
 const { Invoice, InvoiceItem, Customer, User, Product, Order } = require("../models");
 const { Op } = require("sequelize");
+const { createNotification, notifyManagers } = require("./notification.controller");
 
 // Generar número de factura automático
 const generateInvoiceNumber = async () => {
@@ -26,7 +27,19 @@ const generateInvoiceNumber = async () => {
 exports.getAll = async (req, res) => {
   try {
     const { user } = req;
-    const whereClause = user.role === 'admin' ? {} : { user_id: user.id };
+    let whereClause = {};
+
+    // Sistema de permisos por rol
+    if (user.role === 'user') {
+      // Users solo ven sus propias facturas
+      whereClause = { user_id: user.id };
+    } else if (user.role === 'manager') {
+      // Managers ven todas las facturas (cuando implementemos equipos, verán solo su equipo)
+      whereClause = {};
+    } else if (user.role === 'admin') {
+      // Admins ven todas las facturas
+      whereClause = {};
+    }
 
     const invoices = await Invoice.findAll({
       where: whereClause,
@@ -190,6 +203,42 @@ exports.create = async (req, res) => {
       ]
     });
 
+    // Notificar creación de factura
+    await createNotification(
+      user.id,
+      '📄 Factura Generada',
+      `Factura ${invoiceNumber} creada por $${total.toFixed(2)}`,
+      'success',
+      invoice.id,
+      'invoice'
+    );
+
+    // Notificar a managers si es una factura de alto valor
+    if (total > 10000) {
+      await notifyManagers(
+        '💰 Factura de Alto Valor',
+        `Nueva factura ${invoiceNumber} por $${total.toFixed(2)}`,
+        'info',
+        invoice.id,
+        'invoice'
+      );
+    }
+
+    // Alertar si la fecha de vencimiento es próxima (menos de 7 días)
+    if (dueDate) {
+      const daysUntilDue = Math.ceil((new Date(dueDate) - new Date()) / (1000 * 60 * 60 * 24));
+      if (daysUntilDue <= 7 && daysUntilDue > 0) {
+        await createNotification(
+          user.id,
+          '⚠️ Factura Próxima a Vencer',
+          `La factura ${invoiceNumber} vence en ${daysUntilDue} día(s)`,
+          'warning',
+          invoice.id,
+          'invoice'
+        );
+      }
+    }
+
     res.status(201).json(fullInvoice);
   } catch (err) {
     console.error("Error al crear factura:", err);
@@ -222,6 +271,55 @@ exports.update = async (req, res) => {
       dueDate: dueDate || invoice.dueDate,
       notes: notes !== undefined ? notes : invoice.notes
     });
+
+    // Notificar cambios de estado
+    if (status && status !== invoice.status) {
+      const statusEmojis = {
+        pending: '⏳',
+        paid: '✅',
+        overdue: '⚠️',
+        cancelled: '❌'
+      };
+      const statusTexts = {
+        pending: 'Pendiente',
+        paid: 'Pagada',
+        overdue: 'Vencida',
+        cancelled: 'Cancelada'
+      };
+      
+      const emoji = statusEmojis[status] || '📄';
+      
+      await createNotification(
+        user.id,
+        `${emoji} Factura ${statusTexts[status] || status}`,
+        `La factura ${invoice.invoiceNumber} ha sido marcada como ${statusTexts[status] || status}`,
+        status === 'paid' ? 'success' : status === 'overdue' ? 'warning' : status === 'cancelled' ? 'error' : 'info',
+        invoice.id,
+        'invoice'
+      );
+
+      // Notificar a managers cuando se recibe un pago
+      if (status === 'paid') {
+        await notifyManagers(
+          '💰 Pago Recibido',
+          `La factura ${invoice.invoiceNumber} por $${invoice.total.toFixed(2)} ha sido pagada`,
+          'success',
+          invoice.id,
+          'invoice'
+        );
+      }
+
+      // Alertar a managers sobre facturas vencidas
+      if (status === 'overdue') {
+        await notifyManagers(
+          '⚠️ Factura Vencida',
+          `La factura ${invoice.invoiceNumber} por $${invoice.total.toFixed(2)} está vencida`,
+          'warning',
+          invoice.id,
+          'invoice'
+        );
+      }
+    }
 
     res.json(invoice);
   } catch (err) {

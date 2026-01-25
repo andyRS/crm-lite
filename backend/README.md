@@ -1,13 +1,28 @@
-# CRM Lite ERP - Backend
+# 🚀 CRM Lite ERP - Backend
+
+[![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
+[![Express](https://img.shields.io/badge/Express-5.2.1-lightgrey.svg)](https://expressjs.com/)
+[![MySQL](https://img.shields.io/badge/MySQL-8.0-orange.svg)](https://www.mysql.com/)
+[![Sequelize](https://img.shields.io/badge/Sequelize-6.37.7-blue.svg)](https://sequelize.org/)
 
 ## 👨‍💻 Desarrollador
 **Andy Rosado** - Ingeniero de Sistemas | Desarrollador Web Full Stack
+
+**Última Actualización:** Enero 2026
 
 ---
 
 ## 📋 Descripción
 
-Backend del sistema CRM Lite ERP desarrollado con Node.js y Express. Proporciona una API RESTful completa para gestión empresarial con autenticación JWT, validación robusta y manejo avanzado de errores.
+Backend del sistema CRM Lite ERP desarrollado con Node.js y Express. Proporciona una API RESTful completa para gestión empresarial con:
+
+- 🔐 Autenticación JWT con refresh tokens
+- 🔔 Notificaciones en tiempo real vía Socket.IO
+- 💰 Sistema de facturación multimoneda (DOP/USD)
+- 📊 Reportes avanzados con gráficos
+- 🛡️ Seguridad robusta con rate limiting y validación
+- 📈 Sistema de logging estructurado
+- ⚡ Caché en memoria y paginación automática
 
 ## 🏗️ Arquitectura
 
@@ -28,30 +43,52 @@ backend/
 └── .env               # Variables de entorno
 ```
 
-## 🚀 Características Principales
+## ✨ Características Principales
 
-### Seguridad
-- 🔐 Autenticación JWT con refresh tokens
-- 🛡️ Rate limiting (100 req/15min)
-- 🔒 Helmet para headers de seguridad
-- 🚫 Sanitización de inputs contra XSS
-- ✅ CORS configurado para múltiples orígenes
-- 📝 Validación exhaustiva con Joi en todos los endpoints
+### 🔐 Seguridad Implementada
+- **Autenticación JWT** con access y refresh tokens
+- **Bcrypt** para hash de contraseñas (10 salt rounds)
+- **Helmet** para headers HTTP seguros
+- **Rate Limiting**: 100 requests / 15 minutos
+- **CORS** configurado para orígenes específicos
+- **Sanitización XSS** en todos los inputs
+- **Validación Joi** exhaustiva en endpoints
+- **SQL Injection Protection** vía Sequelize ORM
+- **RBAC** (Role-Based Access Control)
+- **Logging de seguridad** para ataques detectados
 
-### Robustez
-- 🎯 Manejo global de errores con middleware
-- 📊 Sistema de logging estructurado (ERROR, WARN, INFO, DEBUG)
-- 💾 Transacciones de base de datos para operaciones críticas
-- ✅ Validación de variables de entorno al iniciar
-- 🔄 Wrapper catchAsync para controladores asíncronos
-- 📈 Optimización de queries con includes opcionales
+### 🛡️ Robustez del Sistema
+- **Manejo global de errores** con middleware centralizado
+- **Sistema de logging** estructurado (4 niveles: ERROR, WARN, INFO, DEBUG)
+- **Transacciones DB** para operaciones críticas
+- **Validación de entorno** al iniciar servidor
+- **CatchAsync wrapper** para controladores asíncronos
+- **Error boundaries** y mensajes de error claros
+- **Health checks** y monitoring endpoints
 
-### Escalabilidad
-- 🚀 Pool de conexiones optimizado (max: 10, timeout: 60s)
-- 💨 Sistema de caché en memoria con TTL
-- 📄 Paginación reutilizable en todos los listados
-- 🔄 Lazy loading de relaciones
-- 📦 Modelos normalizados con relaciones bien definidas
+### ⚡ Escalabilidad y Performance
+- **Pool de conexiones MySQL**: max 10, timeout 60s
+- **Caché en memoria** con TTL configurable
+- **Paginación automática** en todos los listados
+- **Lazy loading** de relaciones Sequelize
+- **Índices optimizados** en base de datos
+- **Query optimization** con includes opcionales
+- **Modelos normalizados** con relaciones bien definidas
+
+### 🔔 Tiempo Real
+- **Socket.IO** para notificaciones instantáneas
+- **27 tipos de notificaciones** implementadas
+- **Eventos en tiempo real** (órdenes, pagos, alertas)
+- **Broadcast selectivo** por usuario y rol
+- **Reconexión automática** del cliente
+
+### 💰 Facturación Avanzada
+- **Multimoneda**: DOP (RD$) y USD ($)
+- **ITBIS 18%** automático
+- **Múltiples estados**: pending, paid, overdue, cancelled
+- **Integración Stripe** para pagos online
+- **Modo simulación** para países sin Stripe
+- **Múltiples métodos de pago**: efectivo, tarjeta, transferencia, cheque
 
 ## 📡 API Endpoints
 

@@ -5,7 +5,23 @@ const { startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths, format } = 
 exports.getSalesReport = async (req, res) => {
   try {
     const { period = 'month', startDate, endDate } = req.query;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    
     let dateFilter = {};
+    let userFilter = {};
+
+    // Sistema de permisos por rol
+    if (userRole === 'user') {
+      // Users solo ven sus propios datos
+      userFilter = { user_id: userId };
+    } else if (userRole === 'manager') {
+      // Managers ven todo (cuando implementemos equipos, verán solo su equipo)
+      userFilter = {};
+    } else if (userRole === 'admin') {
+      // Admins ven todo
+      userFilter = {};
+    }
 
     if (startDate && endDate) {
       dateFilter = {
@@ -39,13 +55,13 @@ exports.getSalesReport = async (req, res) => {
     }
 
     // Estadísticas generales
-    const totalSales = await Order.sum('total', { where: { ...dateFilter, status: 'delivered' } }) || 0;
-    const totalOrders = await Order.count({ where: { ...dateFilter, status: 'delivered' } });
+    const totalSales = await Order.sum('total', { where: { ...dateFilter, ...userFilter, status: 'delivered' } }) || 0;
+    const totalOrders = await Order.count({ where: { ...dateFilter, ...userFilter, status: 'delivered' } });
     const avgOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
 
     // Clientes activos únicos (con al menos una orden entregada en el período)
     const activeCustomers = await Order.findAll({
-      where: { ...dateFilter, status: 'delivered' },
+      where: { ...dateFilter, ...userFilter, status: 'delivered' },
       attributes: [
         [require('sequelize').fn('COUNT', require('sequelize').fn('DISTINCT', require('sequelize').col('customer_id'))), 'count']
       ],
@@ -58,7 +74,7 @@ exports.getSalesReport = async (req, res) => {
       include: [
         {
           model: Order,
-          where: { ...dateFilter, status: 'delivered' },
+          where: { ...dateFilter, ...userFilter, status: 'delivered' },
           attributes: []
         },
         {
@@ -80,7 +96,7 @@ exports.getSalesReport = async (req, res) => {
       include: [
         {
           model: Order,
-          where: { ...dateFilter, status: 'delivered' },
+          where: { ...dateFilter, ...userFilter, status: 'delivered' },
           attributes: []
         },
         { model: Product, attributes: ['name'] }
@@ -97,7 +113,7 @@ exports.getSalesReport = async (req, res) => {
 
     // Clientes más activos con detalles - primero obtener agregaciones
     const topCustomersRaw = await Order.findAll({
-      where: { ...dateFilter, status: 'delivered' },
+      where: { ...dateFilter, ...userFilter, status: 'delivered' },
       attributes: [
         'customer_id',
         [require('sequelize').fn('COUNT', require('sequelize').col('Order.id')), 'orderCount'],
@@ -179,7 +195,22 @@ exports.getSalesReport = async (req, res) => {
 exports.getDashboardCharts = async (req, res) => {
   try {
     const { period = '6months' } = req.query;
+    const userId = req.user.id;
+    const userRole = req.user.role;
     const months = period === '6months' ? 6 : 12;
+
+    // Sistema de permisos por rol
+    let userFilter = {};
+    if (userRole === 'user') {
+      // Users solo ven sus propios datos
+      userFilter = { user_id: userId };
+    } else if (userRole === 'manager') {
+      // Managers ven todo (cuando implementemos equipos, verán solo su equipo)
+      userFilter = {};
+    } else if (userRole === 'admin') {
+      // Admins ven todo
+      userFilter = {};
+    }
 
     // Datos para gráfico de ventas mensuales
     const salesData = [];
@@ -190,6 +221,7 @@ exports.getDashboardCharts = async (req, res) => {
 
       const monthlySales = await Order.sum('total', {
         where: {
+          ...userFilter,
           createdAt: { [Op.between]: [monthStart, monthEnd] },
           status: 'delivered'
         }
@@ -197,6 +229,7 @@ exports.getDashboardCharts = async (req, res) => {
 
       const monthlyOrders = await Order.count({
         where: {
+          ...userFilter,
           createdAt: { [Op.between]: [monthStart, monthEnd] },
           status: 'delivered'
         }
@@ -211,6 +244,7 @@ exports.getDashboardCharts = async (req, res) => {
 
     // Distribución de estados de órdenes
     const orderStatusData = await Order.findAll({
+      where: userFilter,
       attributes: [
         'status',
         [require('sequelize').fn('COUNT', require('sequelize').col('status')), 'count']
@@ -221,19 +255,29 @@ exports.getDashboardCharts = async (req, res) => {
 
     // Top 5 productos por ventas
     const productSalesData = await OrderItem.findAll({
-      include: [{ model: Product, attributes: ['name'] }],
+      include: [
+        {
+          model: Order,
+          where: { ...userFilter, status: 'delivered' },
+          attributes: []
+        },
+        { 
+          model: Product, 
+          attributes: ['name'] 
+        }
+      ],
       attributes: [
         'product_id',
-        [require('sequelize').fn('SUM', require('sequelize').col('quantity')), 'quantity']
+        [require('sequelize').fn('SUM', require('sequelize').col('OrderItem.quantity')), 'quantity']
       ],
       group: ['product_id', 'Product.id'],
-      order: [[require('sequelize').fn('SUM', require('sequelize').col('quantity')), 'DESC']],
+      order: [[require('sequelize').fn('SUM', require('sequelize').col('OrderItem.quantity')), 'DESC']],
       limit: 5
     });
 
     // Top 5 clientes por facturación
     const customerSalesData = await Order.findAll({
-      where: { status: 'delivered' },
+      where: { ...userFilter, status: 'delivered' },
       include: [{ model: Customer, attributes: ['name'] }],
       attributes: [
         'customer_id',

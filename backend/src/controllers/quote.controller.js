@@ -1,5 +1,5 @@
 const { Quote, QuoteItem, Customer, Product, User, Notification } = require("../models");
-const { createNotification } = require("./notification.controller");
+const { createNotification, notifyManagers } = require("./notification.controller");
 const companyConfig = require("../config/company");
 
 exports.getCompanyInfo = async (req, res) => {
@@ -15,9 +15,16 @@ exports.getAll = async (req, res) => {
   try {
     let whereClause = {};
 
-    // Si no es admin, solo ver sus propias cotizaciones
-    if (req.user.role !== 'admin') {
+    // Sistema de permisos por rol
+    if (req.user.role === 'user') {
+      // Users solo ven sus propias cotizaciones
       whereClause.userId = req.user.id;
+    } else if (req.user.role === 'manager') {
+      // Managers ven todas las cotizaciones (cuando implementemos equipos, verán solo su equipo)
+      whereClause = {};
+    } else if (req.user.role === 'admin') {
+      // Admins ven todas las cotizaciones
+      whereClause = {};
     }
 
     const quotes = await Quote.findAll({
@@ -101,16 +108,42 @@ exports.create = async (req, res) => {
       ]
     });
 
-    // Crear notificación
+    // Crear notificación de éxito
     const clientNameForNotification = quoteWithDetails.Customer?.name || clientName || 'Cliente';
     await createNotification(
       req.user.id,
-      'Nueva Cotización Creada',
-      `Cotización ${quoteNumber} creada para ${clientNameForNotification}`,
+      '✅ Cotización Creada',
+      `Cotización ${quoteNumber} creada para ${clientNameForNotification} por $${total.toFixed(2)}`,
       'success',
       quote.id,
       'quote'
     );
+
+    // Notificar a managers si es una cotización de alto valor
+    if (total > 5000) {
+      await notifyManagers(
+        '💰 Cotización de Alto Valor',
+        `Nueva cotización ${quoteNumber} para ${clientNameForNotification} por $${total.toFixed(2)}`,
+        'info',
+        quote.id,
+        'quote'
+      );
+    }
+
+    // Alertar si la cotización está por vencer pronto (menos de 3 días)
+    if (validUntil) {
+      const daysUntilExpiry = Math.ceil((new Date(validUntil) - new Date()) / (1000 * 60 * 60 * 24));
+      if (daysUntilExpiry <= 3 && daysUntilExpiry > 0) {
+        await createNotification(
+          req.user.id,
+          '⏰ Cotización Por Vencer',
+          `La cotización ${quoteNumber} vence en ${daysUntilExpiry} día(s)`,
+          'warning',
+          quote.id,
+          'quote'
+        );
+      }
+    }
 
     res.status(201).json(quoteWithDetails);
   } catch (error) {
@@ -146,6 +179,43 @@ exports.update = async (req, res) => {
         }
       ]
     });
+
+    // Notificar cambio de estado si existe
+    if (status && status !== quote.status) {
+      const statusEmojis = {
+        pending: '⏳',
+        approved: '✅',
+        rejected: '❌',
+        expired: '⏰'
+      };
+      const emoji = statusEmojis[status] || '📝';
+      const statusTexts = {
+        pending: 'Pendiente',
+        approved: 'Aprobada',
+        rejected: 'Rechazada',
+        expired: 'Vencida'
+      };
+      
+      await createNotification(
+        req.user.id,
+        `${emoji} Cotización ${statusTexts[status] || status}`,
+        `La cotización ${quote.quoteNumber} ha sido marcada como ${statusTexts[status] || status}`,
+        status === 'approved' ? 'success' : status === 'rejected' ? 'error' : 'info',
+        quote.id,
+        'quote'
+      );
+
+      // Si se aprueba, notificar a managers
+      if (status === 'approved') {
+        await notifyManagers(
+          '🎉 Cotización Aprobada',
+          `La cotización ${quote.quoteNumber} por $${quote.total.toFixed(2)} ha sido aprobada`,
+          'success',
+          quote.id,
+          'quote'
+        );
+      }
+    }
 
     res.json(updatedQuote);
   } catch (error) {
@@ -207,11 +277,20 @@ exports.convertToOrder = async (req, res) => {
     // Actualizar cotización como aprobada
     await quote.update({ status: 'approved' });
 
-    // Crear notificación
+    // Crear notificación de conversión exitosa
     await createNotification(
       req.user.id,
-      'Cotización Convertida a Orden',
-      `Cotización ${quote.quoteNumber} convertida exitosamente a orden ${orderNumber}`,
+      '🎉 Cotización Convertida a Pedido',
+      `Cotización ${quote.quoteNumber} convertida exitosamente a pedido ${orderNumber} por $${quote.total.toFixed(2)}`,
+      'success',
+      order.id,
+      'order'
+    );
+
+    // Notificar a managers sobre la conversión
+    await notifyManagers(
+      '✅ Cotización Convertida',
+      `La cotización ${quote.quoteNumber} se ha convertido en pedido ${orderNumber} por $${quote.total.toFixed(2)}`,
       'success',
       order.id,
       'order'

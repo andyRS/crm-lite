@@ -1,13 +1,21 @@
 const Customer = require("../models/customer.model");
 const { Order, OrderItem, Product } = require("../models");
+const { createNotification, notifyManagers } = require("./notification.controller");
 
 exports.getAll = async (req, res) => {
   try {
     let whereClause = {};
 
-    // Si no es admin, solo ver sus propios clientes
-    if (req.user.role !== 'admin') {
+    // Sistema de permisos por rol
+    if (req.user.role === 'user') {
+      // Users solo ven sus propios clientes
       whereClause.user_id = req.user.id;
+    } else if (req.user.role === 'manager') {
+      // Managers ven todos los clientes (cuando implementemos equipos, verán solo su equipo)
+      whereClause = {};
+    } else if (req.user.role === 'admin') {
+      // Admins ven todos los clientes
+      whereClause = {};
     }
 
     const customers = await Customer.findAll({ where: whereClause });
@@ -44,6 +52,28 @@ exports.create = async (req, res) => {
     };
     
     const customer = await Customer.create(customerData);
+
+    // Notificar creación de nuevo cliente
+    await createNotification(
+      req.user.id,
+      '👤 Nuevo Cliente Registrado',
+      `Cliente ${customer.name} ${customer.lastName || ''} (${clientId}) registrado exitosamente`,
+      'success',
+      customer.id,
+      'customer'
+    );
+
+    // Notificar a managers sobre nuevos clientes con límite de crédito alto
+    if (customer.creditLimit && customer.creditLimit > 50000) {
+      await notifyManagers(
+        '💳 Cliente con Alto Límite de Crédito',
+        `Nuevo cliente ${customer.name} con límite de crédito de $${customer.creditLimit.toFixed(2)}`,
+        'info',
+        customer.id,
+        'customer'
+      );
+    }
+
     res.status(201).json(customer);
   } catch (error) {
     console.error("Error creating customer:", error);
@@ -89,6 +119,54 @@ exports.update = async (req, res) => {
     if (notes !== undefined) customer.notes = notes;
 
     await customer.save();
+
+    // Notificar cambios importantes
+    if (creditLimit !== undefined && creditLimit !== customer.creditLimit) {
+      await createNotification(
+        req.user.id,
+        '💳 Límite de Crédito Actualizado',
+        `Límite de crédito del cliente ${customer.name} actualizado a $${creditLimit.toFixed(2)}`,
+        'info',
+        customer.id,
+        'customer'
+      );
+
+      // Alertar a managers si el límite de crédito es muy alto
+      if (creditLimit > 100000) {
+        await notifyManagers(
+          '⚠️ Límite de Crédito Alto',
+          `Cliente ${customer.name} ahora tiene un límite de crédito de $${creditLimit.toFixed(2)}`,
+          'warning',
+          customer.id,
+          'customer'
+        );
+      }
+    }
+
+    // Notificar cambio de estado si el cliente fue desactivado
+    if (status !== undefined && status === 'inactive' && customer.status === 'active') {
+      await createNotification(
+        req.user.id,
+        '🔴 Cliente Desactivado',
+        `Cliente ${customer.name} ha sido desactivado`,
+        'warning',
+        customer.id,
+        'customer'
+      );
+    }
+
+    // Notificar reactivación de cliente
+    if (status !== undefined && status === 'active' && customer.status === 'inactive') {
+      await createNotification(
+        req.user.id,
+        '🟢 Cliente Reactivado',
+        `Cliente ${customer.name} ha sido reactivado`,
+        'success',
+        customer.id,
+        'customer'
+      );
+    }
+
     res.json(customer);
   } catch (error) {
     console.error("Error updating customer:", error);
@@ -130,9 +208,10 @@ exports.getDetails = async (req, res) => {
     }
 
     // Verificar permisos
-    if (req.user.role !== 'admin' && customer.user_id !== req.user.id) {
+    if (req.user.role === 'user' && customer.user_id !== req.user.id) {
       return res.status(403).json({ msg: "No tienes permisos para ver este cliente" });
     }
+    // Managers y Admins pueden ver cualquier cliente
 
     // Obtener todas las órdenes del cliente con sus productos
     const orders = await Order.findAll({

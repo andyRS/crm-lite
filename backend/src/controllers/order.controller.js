@@ -1,13 +1,21 @@
 const { Order, OrderItem, Customer, Product, User } = require("../models");
 const { Op } = require("sequelize");
+const { createNotification, notifyManagers } = require("./notification.controller");
 
 exports.getAll = async (req, res) => {
   try {
     let whereClause = {};
 
-    // Si no es admin, solo ver sus propios pedidos
-    if (req.user.role !== 'admin') {
+    // Sistema de permisos por rol
+    if (req.user.role === 'user') {
+      // Users solo ven sus propios pedidos
       whereClause.user_id = req.user.id;
+    } else if (req.user.role === 'manager') {
+      // Managers ven todos los pedidos (cuando implementemos equipos, verán solo su equipo)
+      whereClause = {};
+    } else if (req.user.role === 'admin') {
+      // Admins ven todos los pedidos
+      whereClause = {};
     }
 
     const orders = await Order.findAll({
@@ -73,6 +81,18 @@ exports.create = async (req, res) => {
         return res.status(400).json({
           msg: `La orden excedería el límite de crédito del cliente. Límite: $${customer.creditLimit}, Deuda actual: $${customer.currentDebt}, Total orden: $${preliminaryTotal}`
         });
+      }
+
+      // Alertar si el cliente está cerca del límite de crédito (80% o más)
+      const creditUsagePercentage = (newDebt / customer.creditLimit) * 100;
+      if (creditUsagePercentage >= 80) {
+        await notifyManagers(
+          '⚠️ Cliente Cerca del Límite de Crédito',
+          `Cliente ${customer.name} está usando ${creditUsagePercentage.toFixed(0)}% de su límite de crédito ($${newDebt.toFixed(2)} de $${customer.creditLimit.toFixed(2)})`,
+          'warning',
+          customer.id,
+          'customer'
+        );
       }
     }
 
@@ -165,47 +185,45 @@ exports.create = async (req, res) => {
       ]
     });
 
-    // Crear notificación para el usuario que creó la orden
-    const { createNotification } = require("./notification.controller");
+    // 📢 NOTIFICACIÓN: Nuevo pedido creado
     await createNotification(
       req.user.id,
-      'Nueva Orden Creada',
-      `Orden ${orderNumber} creada para ${customer.name} por $${total}`,
+      '✅ Pedido Creado',
+      `Pedido ${orderNumber} creado exitosamente por $${total.toFixed(2)}`,
       'success',
       order.id,
       'order'
     );
 
-    // Notificar a administradores sobre nueva orden
-    const admins = await User.findAll({ where: { role: 'admin' } });
-    for (const admin of admins) {
-      if (admin.id !== req.user.id) { // No notificar al mismo usuario
-        await createNotification(
-          admin.id,
-          'Nueva Orden en el Sistema',
-          `Nueva orden ${orderNumber} creada por ${req.user.name}`,
-          'info',
-          order.id,
-          'order'
+    // Notificar a managers si el pedido es de alta prioridad o valor alto
+    if (priority === 'high' || total > 1000) {
+      await notifyManagers(
+        '🔥 Nuevo Pedido Importante',
+        `Pedido ${orderNumber} - Prioridad: ${priority}, Total: $${total.toFixed(2)}`,
+        'warning',
+        order.id,
+        'order'
+      );
+    }
+
+    // Verificar productos con stock bajo después de la orden
+    for (const item of items) {
+      const product = await Product.findByPk(item.product_id);
+      if (product.trackInventory && product.stock <= product.minStock) {
+        await notifyManagers(
+          '⚠️ Stock Bajo',
+          `Producto "${product.name}" está en stock bajo: ${product.stock} unidades`,
+          'warning',
+          product.id,
+          'product'
         );
       }
     }
 
-    // Enviar notificación en tiempo real vía WebSocket
-    if (global.io) {
-      global.io.to(`user_${req.user.id}`).emit('notification', {
-        type: 'order_created',
-        title: 'Nueva Orden Creada',
-        message: `Orden ${orderNumber} creada exitosamente`,
-        orderId: order.id
-      });
-    }
-
     res.status(201).json(orderWithDetails);
   } catch (error) {
-    await transaction.rollback();
     console.error("Error creating order:", error);
-    res.status(500).json({ msg: "Error al crear pedido" });
+    res.status(500).json({ msg: "Error al crear orden" });
   }
 };
 
@@ -225,7 +243,41 @@ exports.update = async (req, res) => {
       return res.status(403).json({ msg: "No tienes permisos para editar este pedido" });
     }
 
+    const oldStatus = order.status;
     await order.update({ status, deliveryDate, notes });
+
+    // 📢 NOTIFICACIÓN: Cambio de estado del pedido
+    if (oldStatus !== status) {
+      const statusMessages = {
+        'pending': '⏳ Pedido en Espera',
+        'confirmed': '✅ Pedido Confirmado',
+        'processing': '📦 Pedido en Proceso',
+        'shipped': '🚚 Pedido Enviado',
+        'delivered': '✨ Pedido Entregado',
+        'cancelled': '❌ Pedido Cancelado'
+      };
+
+      await createNotification(
+        order.user_id,
+        statusMessages[status] || 'Estado Actualizado',
+        `Pedido ${order.orderNumber} cambió de ${oldStatus} a ${status}`,
+        status === 'delivered' ? 'success' : status === 'cancelled' ? 'error' : 'info',
+        order.id,
+        'order'
+      );
+
+      // Si se marca como entregado, notificar logro
+      if (status === 'delivered') {
+        await createNotification(
+          order.user_id,
+          '🎉 Venta Completada',
+          `¡Pedido ${order.orderNumber} entregado exitosamente!`,
+          'success',
+          order.id,
+          'order'
+        );
+      }
+    }
 
     const updatedOrder = await Order.findByPk(id, {
       include: [

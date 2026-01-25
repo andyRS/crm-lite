@@ -30,45 +30,30 @@ exports.getStats = async (req, res) => {
         totalOrders,
         pendingOrders,
         revenue: totalRevenue,
-        growth: 15.5, // mock
+        growth: 15.5,
         recentCustomers: await Customer.findAll({
           limit: 5,
           order: [['createdAt', 'DESC']],
-          include: [{ model: User, attributes: ['name'] }]
-        }),
-        recentOrders: await Order.findAll({
-          limit: 5,
-          order: [['createdAt', 'DESC']],
-          include: [
-            { model: Customer, attributes: ['name', 'email'] },
-            { model: OrderItem, include: [{ model: Product, attributes: ['name'] }] }
-          ]
+          attributes: ['id', 'name', 'email', 'createdAt']
         })
       };
     } else if (userRole === 'manager') {
-      // Manager ve stats de su equipo (simulado, ya que no hay equipos)
-      const userCustomers = await Customer.count({ where: { user_id: userId } });
-      const userOrders = await Order.count({ where: { user_id: userId } });
-      const userRevenue = await Order.sum('total', { where: { user_id: userId } }) || 0;
+      // Manager ve estadísticas del equipo (por ahora ve todo hasta implementar equipos)
+      const totalCustomers = await Customer.count();
+      const totalProducts = await Product.count({ where: { active: true } });
+      const totalOrders = await Order.count();
+      const totalRevenue = await Order.sum('total') || 0;
 
       stats = {
-        myCustomers: userCustomers,
-        myOrders: userOrders,
-        revenue: userRevenue,
+        myCustomers: totalCustomers,
+        myOrders: totalOrders,
+        totalProducts,
+        revenue: totalRevenue,
         growth: 10.2,
         recentCustomers: await Customer.findAll({
-          where: { user_id: userId },
-          limit: 5,
-          order: [['createdAt', 'DESC']]
-        }),
-        recentOrders: await Order.findAll({
-          where: { user_id: userId },
           limit: 5,
           order: [['createdAt', 'DESC']],
-          include: [
-            { model: Customer, attributes: ['name', 'email'] },
-            { model: OrderItem, include: [{ model: Product, attributes: ['name'] }] }
-          ]
+          attributes: ['id', 'name', 'email', 'createdAt']
         })
       };
     } else {
@@ -76,24 +61,32 @@ exports.getStats = async (req, res) => {
       const myCustomers = await Customer.count({ where: { user_id: userId } });
       const myOrders = await Order.count({ where: { user_id: userId } });
       const myRevenue = await Order.sum('total', { where: { user_id: userId } }) || 0;
+      
+      // Calcular crecimiento real del usuario comparando con mes anterior
+      const lastMonth = new Date();
+      lastMonth.setMonth(lastMonth.getMonth() - 1);
+      
+      const lastMonthRevenue = await Order.sum('total', { 
+        where: { 
+          user_id: userId,
+          createdAt: { [require('sequelize').Op.lt]: lastMonth }
+        } 
+      }) || 0;
+      
+      const growth = lastMonthRevenue > 0 
+        ? ((myRevenue - lastMonthRevenue) / lastMonthRevenue * 100).toFixed(1)
+        : 0;
 
       stats = {
         myCustomers,
+        myOrders,
         revenue: myRevenue,
-        growth: 5.8,
+        growth: parseFloat(growth),
         recentCustomers: await Customer.findAll({
           where: { user_id: userId },
           limit: 5,
-          order: [['createdAt', 'DESC']]
-        }),
-        recentOrders: await Order.findAll({
-          where: { user_id: userId },
-          limit: 5,
           order: [['createdAt', 'DESC']],
-          include: [
-            { model: Customer, attributes: ['name', 'email'] },
-            { model: OrderItem, include: [{ model: Product, attributes: ['name'] }] }
-          ]
+          attributes: ['id', 'name', 'email', 'createdAt']
         })
       };
     }

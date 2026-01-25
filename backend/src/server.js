@@ -21,8 +21,7 @@ const config = getConfig();
 // Inicializar servidor HTTP
 const server = http.createServer(app);
 
-// Configurar Socket.IO - TEMPORALMENTE DESHABILITADO PARA DEBUG
-/*
+// Configurar Socket.IO para notificaciones en tiempo real
 const io = socketIo(server, {
   cors: {
     origin: "http://localhost:5173",
@@ -36,22 +35,21 @@ const io = socketIo(server, {
 
 // Conexiones de Socket.IO
 io.on('connection', (socket) => {
-  console.log('Usuario conectado:', socket.id);
+  console.log('✅ Usuario conectado:', socket.id);
 
   // Unir usuario a su sala personal
   socket.on('join', (userId) => {
     socket.join(`user_${userId}`);
-    console.log(`Usuario ${userId} se unió a su sala`);
+    console.log(`👤 Usuario ${userId} se unió a su sala`);
   });
 
   socket.on('disconnect', () => {
-    console.log('Usuario desconectado:', socket.id);
+    console.log('❌ Usuario desconectado:', socket.id);
   });
 });
 
 // Hacer io disponible globalmente para enviar notificaciones
 global.io = io;
-*/
 
 connectDB();
 
