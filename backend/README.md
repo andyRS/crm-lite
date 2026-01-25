@@ -411,4 +411,4 @@ tail -f logs/combined.log
 
 ---
 
-© 2026 CRM Lite ERP Backend. Desarrollado por Andy Rosado.
+© 2026 CRM Lite ERP Backend. Desarrollado por Andy Rosado.# Build 2026-01-25 10:10:59
