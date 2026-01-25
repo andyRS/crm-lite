@@ -1,4 +1,4 @@
-const bcrypt = require("../../node_modules/bcryptjs/umd");
+const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { User } = require("../models");
 
@@ -121,23 +121,38 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.error('========================================');
+    console.error('[LOGIN DEBUG] Login attempt for:', email);
+    console.error('========================================');
+
     // Validaciones
     if (!email || !password) {
+      console.error('[LOGIN DEBUG] FAILED: Missing credentials');
       logSecurityEvent('LOGIN_ATTEMPT_MISSING_CREDENTIALS', { ip: req.ip });
       return res.status(400).json({
         msg: "Email y password son obligatorios",
+        debug: "Missing email or password"
       });
     }
 
     const user = await User.findOne({ where: { email } });
     if (!user) {
+      console.error('[LOGIN DEBUG] FAILED: User not found:', email);
       logSecurityEvent('LOGIN_ATTEMPT_USER_NOT_FOUND', { email, ip: req.ip });
-      return res.status(401).json({ msg: "Credenciales inválidas" });
+      return res.status(401).json({ 
+        msg: "Credenciales inválidas",
+        debug: `User not found: ${email}`
+      });
     }
+
+    console.error('[LOGIN DEBUG] User found:', email);
+    console.error('[LOGIN DEBUG] Hash in DB:', user.password.substring(0, 30) + '...');
+    console.error('[LOGIN DEBUG] Password received:', password);
 
     // Verificar si la cuenta está bloqueada por intentos fallidos
     if (user.lockedUntil && user.lockedUntil > new Date()) {
       const remainingTime = Math.ceil((user.lockedUntil - new Date()) / 1000 / 60);
+      console.error('[LOGIN DEBUG] FAILED: Account locked');
       logSecurityEvent('LOGIN_ATTEMPT_ACCOUNT_LOCKED', {
         userId: user.id,
         email: user.email,
@@ -149,8 +164,14 @@ exports.login = async (req, res) => {
       });
     }
 
+    console.error('[LOGIN DEBUG] Comparing password with bcrypt...');
+    console.error('[LOGIN DEBUG] bcrypt object:', typeof bcrypt, Object.keys(bcrypt));
     const valid = await bcrypt.compare(password, user.password);
+    console.error('[LOGIN DEBUG] Password valid:', valid);
+    console.error('========================================');
+    
     if (!valid) {
+      console.error('[LOGIN DEBUG] FAILED: Invalid password');
       // Incrementar contador de intentos fallidos
       const failedAttempts = (user.failedLoginAttempts || 0) + 1;
 

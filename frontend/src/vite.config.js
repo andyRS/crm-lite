@@ -33,11 +33,6 @@ export default defineConfig({
       }
     }
   },
-  // Variables de entorno
-  envPrefix: 'VITE_',
-  // No exponer variables de entorno sensibles
-  define: {
-    // Remover cualquier variable sensible que pueda estar expuesta
-    'process.env': {}
-  }
+  // Variables de entorno - Vite maneja automáticamente las variables VITE_*
+  envPrefix: 'VITE_'
 });
