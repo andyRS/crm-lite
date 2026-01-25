@@ -121,6 +121,8 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.log('[DEBUG] Login attempt for:', email);
+
     // Validaciones
     if (!email || !password) {
       logSecurityEvent('LOGIN_ATTEMPT_MISSING_CREDENTIALS', { ip: req.ip });
@@ -131,9 +133,12 @@ exports.login = async (req, res) => {
 
     const user = await User.findOne({ where: { email } });
     if (!user) {
+      console.log('[DEBUG] User not found:', email);
       logSecurityEvent('LOGIN_ATTEMPT_USER_NOT_FOUND', { email, ip: req.ip });
       return res.status(401).json({ msg: "Credenciales inválidas" });
     }
+
+    console.log('[DEBUG] User found, hash:', user.password.substring(0, 20) + '...');
 
     // Verificar si la cuenta está bloqueada por intentos fallidos
     if (user.lockedUntil && user.lockedUntil > new Date()) {
@@ -149,7 +154,10 @@ exports.login = async (req, res) => {
       });
     }
 
+    console.log('[DEBUG] Comparing password...');
     const valid = await bcrypt.compare(password, user.password);
+    console.log('[DEBUG] Password valid:', valid);
+    
     if (!valid) {
       // Incrementar contador de intentos fallidos
       const failedAttempts = (user.failedLoginAttempts || 0) + 1;
