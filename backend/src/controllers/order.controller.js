@@ -1,5 +1,6 @@
 const { Order, OrderItem, Customer, Product, User } = require("../models");
 const { Op } = require("sequelize");
+const { sequelize } = require("../config/db");
 const { createNotification, notifyManagers } = require("./notification.controller");
 
 exports.getAll = async (req, res) => {
@@ -40,7 +41,7 @@ exports.getAll = async (req, res) => {
 };
 
 exports.create = async (req, res) => {
-  const transaction = await require("../models").sequelize.transaction();
+  const transaction = await sequelize.transaction();
 
   try {
     const { customer_id, items, notes, shippingAddress, shippingMethod, shippingCost, priority, source } = req.body;
@@ -297,7 +298,7 @@ exports.update = async (req, res) => {
 };
 
 exports.remove = async (req, res) => {
-  const transaction = await require("../models").sequelize.transaction();
+  const transaction = await sequelize.transaction();
 
   try {
     const { id } = req.params;

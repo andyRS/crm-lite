@@ -122,9 +122,9 @@ const schemas = {
           discount: Joi.number().min(0).default(0)
         })
       ).min(1).required(),
-      notes: Joi.string(),
-      shippingAddress: Joi.string(),
-      shippingMethod: Joi.string(),
+      notes: Joi.string().allow(''),
+      shippingAddress: Joi.string().allow(''),
+      shippingMethod: Joi.string().allow(''),
       shippingCost: Joi.number().min(0).default(0),
       priority: Joi.string().valid('low', 'normal', 'high', 'urgent').default('normal'),
       source: Joi.string().valid('web', 'phone', 'email', 'in_person', 'api').default('web')
@@ -133,11 +133,11 @@ const schemas = {
       status: Joi.string().valid('pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'),
       paymentStatus: Joi.string().valid('unpaid', 'partial', 'paid', 'refunded', 'overpaid'),
       deliveryDate: Joi.date(),
-      shippingAddress: Joi.string(),
-      shippingMethod: Joi.string(),
+      shippingAddress: Joi.string().allow(''),
+      shippingMethod: Joi.string().allow(''),
       shippingCost: Joi.number().min(0),
-      trackingNumber: Joi.string(),
-      notes: Joi.string()
+      trackingNumber: Joi.string().allow(''),
+      notes: Joi.string().allow('')
     })
   },
 
