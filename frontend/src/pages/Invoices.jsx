@@ -47,6 +47,10 @@ export default function Invoices() {
     notes: "",
     paymentMethod: "cash",
     currency: "DOP", // Moneda por defecto
+    ncfType: "01",
+    retentionApplies: false,
+    itbisRetentionPercentage: "",
+    isrRetentionPercentage: "",
     editingId: null
   });
   const [newCustomer, setNewCustomer] = useState({
@@ -62,6 +66,9 @@ export default function Invoices() {
     cvv: "",
     amount: 0
   });
+  const [showNoteModal, setShowNoteModal] = useState(false);
+  const [creditDebitNotes, setCreditDebitNotes] = useState([]);
+  const [noteForm, setNoteForm] = useState({ noteType: "credit_note", amount: "", reason: "" });
 
   useEffect(() => {
     loadInvoices();
@@ -72,6 +79,47 @@ export default function Invoices() {
   useEffect(() => {
     calculateStats();
   }, [invoices]);
+
+  useEffect(() => {
+    if (showDetailModal && selectedInvoice?.id) {
+      loadCreditDebitNotes(selectedInvoice.id);
+    } else {
+      setCreditDebitNotes([]);
+    }
+  }, [showDetailModal, selectedInvoice?.id]);
+
+  const loadCreditDebitNotes = async (invoiceId) => {
+    try {
+      const res = await api.get(`/credit-debit-notes?invoice_id=${invoiceId}`);
+      setCreditDebitNotes(res.data);
+    } catch (err) {
+      console.error("Error al cargar notas de crédito/débito:", err);
+    }
+  };
+
+  const handleCreateNote = async (e) => {
+    e.preventDefault();
+    if (!noteForm.amount || !noteForm.reason) {
+      alert("Monto y razón son obligatorios");
+      return;
+    }
+    try {
+      await api.post("/credit-debit-notes", {
+        invoice_id: selectedInvoice.id,
+        noteType: noteForm.noteType,
+        amount: noteForm.amount,
+        reason: noteForm.reason
+      });
+      alert("Nota emitida exitosamente");
+      setShowNoteModal(false);
+      setNoteForm({ noteType: "credit_note", amount: "", reason: "" });
+      loadCreditDebitNotes(selectedInvoice.id);
+      loadInvoices();
+    } catch (err) {
+      console.error("Error al crear nota:", err);
+      alert(err.response?.data?.msg || "Error al crear nota de crédito/débito");
+    }
+  };
 
   useEffect(() => {
     console.log("showPaymentModal cambió a:", showPaymentModal);
@@ -196,6 +244,10 @@ export default function Invoices() {
         discountAmount: 0,
         notes: "",
         paymentMethod: "cash",
+        ncfType: "01",
+        retentionApplies: false,
+        itbisRetentionPercentage: "",
+        isrRetentionPercentage: "",
         editingId: null
       });
       setView("pending");
@@ -308,7 +360,11 @@ La factura se ha marcado como pagada.`);
         taxRate: 18,
         discountAmount: 0,
         notes: "",
-        paymentMethod: "cash"
+        paymentMethod: "cash",
+        ncfType: "01",
+        retentionApplies: false,
+        itbisRetentionPercentage: "",
+        isrRetentionPercentage: ""
       });
       setPaymentData({
         cardNumber: "",
@@ -685,6 +741,11 @@ La factura se ha marcado como pagada.`);
               <div class="invoice-title">
                 <h1>FACTURA</h1>
                 <div class="invoice-number">${fullInvoice.invoiceNumber}</div>
+                ${fullInvoice.ncf ? `
+                  <div style="margin-top:6px; font-size:11pt; font-weight:bold; letter-spacing:1px;">
+                    NCF: ${fullInvoice.ncf}
+                  </div>
+                ` : ''}
               </div>
             </div>
             
@@ -778,9 +839,16 @@ La factura se ha marcado como pagada.`);
                   <span>TOTAL:</span>
                   <span>${currencySymbol} ${total.toFixed(2)}</span>
                 </div>
+                ${fullInvoice.retentionApplies ? `
+                  <div style="margin-top:10px; padding-top:8px; border-top:1px dashed #999; font-size:9pt; color:#555;">
+                    <div class="totals-row"><span>Retención ITBIS (informativa):</span><span>-${currencySymbol} ${parseFloat(fullInvoice.itbisRetentionAmount || 0).toFixed(2)}</span></div>
+                    <div class="totals-row"><span>Retención ISR (informativa):</span><span>-${currencySymbol} ${parseFloat(fullInvoice.isrRetentionAmount || 0).toFixed(2)}</span></div>
+                    <div class="totals-row" style="font-weight:bold;"><span>Neto a cobrar:</span><span>${currencySymbol} ${parseFloat(fullInvoice.netTotal || total).toFixed(2)}</span></div>
+                  </div>
+                ` : ''}
               </div>
             </div>
-            
+
             <!-- Notas -->
             ${fullInvoice.notes ? `
               <div class="notes-section">
@@ -832,6 +900,10 @@ La factura se ha marcado como pagada.`);
         discountAmount: fullInvoice.discountAmount || 0,
         notes: fullInvoice.notes || '',
         paymentMethod: fullInvoice.paymentMethod || 'cash',
+        ncfType: fullInvoice.ncfType || '01',
+        retentionApplies: fullInvoice.retentionApplies || false,
+        itbisRetentionPercentage: fullInvoice.itbisRetentionPercentage || '',
+        isrRetentionPercentage: fullInvoice.isrRetentionPercentage || '',
       });
       
       // Guardar el ID de la factura para actualizarla en lugar de crear una nueva
@@ -1148,6 +1220,10 @@ La factura se ha marcado como pagada.`);
                   discountAmount: 0,
                   notes: "",
                   paymentMethod: "cash",
+                  ncfType: "01",
+                  retentionApplies: false,
+                  itbisRetentionPercentage: "",
+                  isrRetentionPercentage: "",
                   editingId: null
                 });
               }}
@@ -1318,6 +1394,70 @@ La factura se ha marcado como pagada.`);
                 </div>
               </div>
 
+              {/* Tipo de Comprobante Fiscal (NCF) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tipo de Comprobante (NCF)
+                  </label>
+                  <select
+                    value={form.ncfType}
+                    onChange={(e) => setForm({ ...form, ncfType: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="01">01 - Consumidor Final</option>
+                    <option value="02">02 - Crédito Fiscal</option>
+                    <option value="14">14 - Régimen Especial</option>
+                    <option value="15">15 - Gubernamental</option>
+                    <option value="16">16 - Exportaciones</option>
+                  </select>
+                </div>
+                <div className="flex items-end pb-2">
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={form.retentionApplies}
+                      onChange={(e) => setForm({ ...form, retentionApplies: e.target.checked })}
+                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    El cliente me retendrá ITBIS/ISR al pagar (informativo)
+                  </label>
+                </div>
+              </div>
+
+              {form.retentionApplies && (
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      % ITBIS a retener
+                    </label>
+                    <input
+                      type="number"
+                      value={form.itbisRetentionPercentage}
+                      onChange={(e) => setForm({ ...form, itbisRetentionPercentage: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                      step="0.01"
+                      min="0"
+                      placeholder="ej. 30 ó 100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      % ISR a retener
+                    </label>
+                    <input
+                      type="number"
+                      value={form.isrRetentionPercentage}
+                      onChange={(e) => setForm({ ...form, isrRetentionPercentage: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                      step="0.01"
+                      min="0"
+                      placeholder="ej. 10"
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Método de Pago */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1431,6 +1571,10 @@ La factura se ha marcado como pagada.`);
                       discountAmount: 0,
                       notes: "",
                       paymentMethod: "cash",
+                      ncfType: "01",
+                      retentionApplies: false,
+                      itbisRetentionPercentage: "",
+                      isrRetentionPercentage: "",
                       editingId: null
                     });
                   }}
@@ -1869,6 +2013,9 @@ La factura se ha marcado como pagada.`);
                     <h2 className="text-2xl font-bold text-gray-900">
                       {selectedInvoice.invoiceNumber}
                     </h2>
+                    {selectedInvoice.ncf && (
+                      <p className="text-sm font-mono text-indigo-700 font-semibold mt-1">NCF: {selectedInvoice.ncf}</p>
+                    )}
                     <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full mt-2 ${getStatusColor(selectedInvoice.status)}`}>
                       {translateStatus(selectedInvoice.status)}
                     </span>
@@ -1956,8 +2103,42 @@ La factura se ha marcado como pagada.`);
                       <span className="font-semibold">Total:</span>
                       <span className="font-bold text-indigo-600">${parseFloat(selectedInvoice.total).toFixed(2)}</span>
                     </div>
+                    {selectedInvoice.retentionApplies && (
+                      <div className="border-t pt-2 space-y-1 text-sm text-gray-600">
+                        <div className="flex justify-between">
+                          <span>Retención ITBIS (informativa):</span>
+                          <span>-${parseFloat(selectedInvoice.itbisRetentionAmount || 0).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Retención ISR (informativa):</span>
+                          <span>-${parseFloat(selectedInvoice.isrRetentionAmount || 0).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between font-semibold">
+                          <span>Neto a cobrar:</span>
+                          <span>${parseFloat(selectedInvoice.netTotal || selectedInvoice.total).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
+
+                {/* Notas de Crédito/Débito emitidas */}
+                {selectedInvoice.ncf && creditDebitNotes.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Notas de Crédito/Débito</h3>
+                    <div className="bg-gray-50 p-4 rounded-md space-y-2">
+                      {creditDebitNotes.map((note) => (
+                        <div key={note.id} className="flex justify-between text-sm border-b border-gray-200 pb-2 last:border-0">
+                          <span>
+                            <span className="font-mono font-medium">{note.ncf}</span>{" "}
+                            ({note.noteType === 'credit_note' ? 'Crédito' : 'Débito'}) - {note.reason}
+                          </span>
+                          <span className="font-medium">${parseFloat(note.amount).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Notas */}
                 {selectedInvoice.notes && (
@@ -1985,6 +2166,14 @@ La factura se ha marcado como pagada.`);
                 >
                   Imprimir
                 </button>
+                {selectedInvoice.ncf && selectedInvoice.status !== 'credited' && (
+                  <button
+                    onClick={() => setShowNoteModal(true)}
+                    className="flex-1 bg-amber-600 text-white px-6 py-2 rounded-md hover:bg-amber-700"
+                  >
+                    Nota de Crédito/Débito
+                  </button>
+                )}
                 <button
                   onClick={() => setShowDetailModal(false)}
                   className="px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
@@ -1992,6 +2181,68 @@ La factura se ha marcado como pagada.`);
                   Cerrar
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Nota de Crédito/Débito */}
+        {showNoteModal && selectedInvoice && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Nota sobre factura {selectedInvoice.invoiceNumber}
+              </h3>
+              <form onSubmit={handleCreateNote} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de nota</label>
+                  <select
+                    value={noteForm.noteType}
+                    onChange={(e) => setNoteForm({ ...noteForm, noteType: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="credit_note">Nota de Crédito (04) - reduce/anula el saldo</option>
+                    <option value="debit_note">Nota de Débito (03) - agrega un cargo adicional</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Monto</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    value={noteForm.amount}
+                    onChange={(e) => setNoteForm({ ...noteForm, amount: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Razón (obligatoria para DGII)</label>
+                  <textarea
+                    required
+                    rows="3"
+                    value={noteForm.reason}
+                    onChange={(e) => setNoteForm({ ...noteForm, reason: e.target.value })}
+                    placeholder="Ej. Devolución de mercancía, error en facturación, descuento posterior..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  />
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowNoteModal(false)}
+                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-amber-600 hover:bg-amber-700"
+                  >
+                    Emitir Nota
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

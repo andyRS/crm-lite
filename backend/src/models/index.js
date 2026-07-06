@@ -12,6 +12,9 @@ const Payment = require("./payment.model");
 const PaymentTransaction = require("./paymentTransaction.model");
 const Invoice = require("./invoice.model");
 const InvoiceItem = require("./invoiceItem.model");
+const Company = require("./company.model");
+const NcfSequence = require("./ncfSequence.model");
+const CreditDebitNote = require("./creditDebitNote.model");
 
 // Relaciones existentes
 User.hasMany(Customer, { foreignKey: "user_id" });
@@ -83,6 +86,22 @@ InvoiceItem.belongsTo(Invoice, { foreignKey: "invoice_id" });
 Product.hasMany(InvoiceItem, { foreignKey: "product_id" });
 InvoiceItem.belongsTo(Product, { foreignKey: "product_id" });
 
+// Relaciones fiscales DGII
+NcfSequence.hasMany(Invoice, { foreignKey: "ncfSequence_id" });
+Invoice.belongsTo(NcfSequence, { foreignKey: "ncfSequence_id" });
+
+Invoice.hasMany(CreditDebitNote, { foreignKey: "invoice_id" });
+CreditDebitNote.belongsTo(Invoice, { foreignKey: "invoice_id" });
+
+Customer.hasMany(CreditDebitNote, { foreignKey: "customer_id" });
+CreditDebitNote.belongsTo(Customer, { foreignKey: "customer_id" });
+
+User.hasMany(CreditDebitNote, { foreignKey: "user_id" });
+CreditDebitNote.belongsTo(User, { foreignKey: "user_id" });
+
+NcfSequence.hasMany(CreditDebitNote, { foreignKey: "ncfSequence_id" });
+CreditDebitNote.belongsTo(NcfSequence, { foreignKey: "ncfSequence_id" });
+
 module.exports = {
   User,
   Customer,
@@ -97,5 +116,8 @@ module.exports = {
   Payment,
   PaymentTransaction,
   Invoice,
-  InvoiceItem
+  InvoiceItem,
+  Company,
+  NcfSequence,
+  CreditDebitNote
 };
