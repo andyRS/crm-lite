@@ -71,19 +71,19 @@ export default function Navbar() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
-            <div className="flex items-center gap-3">
-              <Link 
-                to="/" 
-                className="flex items-center gap-2 group"
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <Link
+                to="/"
+                className="flex items-center gap-2 group whitespace-nowrap"
               >
-                <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-2 rounded-xl shadow-lg group-hover:shadow-indigo-500/50 transition-all duration-300 group-hover:scale-110">
+                <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-2 rounded-xl shadow-lg group-hover:shadow-indigo-500/50 transition-all duration-300 group-hover:scale-110 flex-shrink-0">
                   <SparklesIcon className="h-6 w-6 text-white" />
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent tracking-tight">
+                <div className="flex flex-col leading-none">
+                  <span className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent tracking-tight whitespace-nowrap">
                     CRM Lite
                   </span>
-                  <span className="text-[10px] text-slate-400 -mt-1 tracking-wider uppercase font-semibold">
+                  <span className="text-[10px] text-slate-400 mt-0.5 tracking-wider uppercase font-semibold whitespace-nowrap">
                     ERP System
                   </span>
                 </div>
@@ -91,12 +91,12 @@ export default function Navbar() {
             </div>
 
             {/* Desktop Navigation */}
-            <div className="hidden lg:flex items-center gap-1">
+            <div className="hidden xl:flex items-center gap-0.5 overflow-x-auto min-w-0">
               {navLinks.map((link) => (
                 <Link
                   key={link.to}
                   to={link.to}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
+                  className={`flex-shrink-0 whitespace-nowrap px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
                     isActive(link.to)
                       ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/50'
                       : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
@@ -123,7 +123,7 @@ export default function Navbar() {
               </Link>
 
               {/* User Menu */}
-              <div className="relative hidden lg:block">
+              <div className="relative hidden xl:block">
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
                   className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-700/50 transition-colors"
@@ -167,7 +167,7 @@ export default function Navbar() {
               {/* Mobile Menu Button */}
               <button
                 onClick={() => setShowMobileMenu(!showMobileMenu)}
-                className="lg:hidden p-2 hover:bg-slate-700/50 rounded-lg transition-colors"
+                className="xl:hidden p-2 hover:bg-slate-700/50 rounded-lg transition-colors"
               >
                 {showMobileMenu ? (
                   <XMarkIcon className="h-6 w-6 text-white" />
@@ -181,7 +181,7 @@ export default function Navbar() {
 
         {/* Mobile Menu */}
         {showMobileMenu && (
-          <div className="lg:hidden border-t border-slate-700/50 bg-slate-900/95 backdrop-blur-sm">
+          <div className="xl:hidden border-t border-slate-700/50 bg-slate-900/95 backdrop-blur-sm">
             <div className="px-4 py-4 space-y-2">
               {navLinks.map((link) => (
                 <Link
