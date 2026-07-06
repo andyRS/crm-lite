@@ -50,7 +50,8 @@ export default function Navbar() {
     { to: "/orders", label: "Pedidos" },
     { to: "/invoices", label: "Facturación" },
     { to: "/quotes", label: "Cotizaciones" },
-    { to: "/reports", label: "Reportes" }
+    { to: "/reports", label: "Reportes" },
+    ...(user?.role === 'admin' ? [{ to: "/settings", label: "Configuración" }] : [])
   ];
 
   const getRoleBadge = (role) => {

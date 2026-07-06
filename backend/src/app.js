@@ -19,6 +19,9 @@ const reportRoutes = require('./routes/report.routes');
 const paymentRoutes = require('./routes/payment.routes');
 const invoiceRoutes = require('./routes/invoice.routes');
 const stripeRoutes = require('./routes/stripe.routes');
+const companyRoutes = require('./routes/company.routes');
+const ncfSequenceRoutes = require('./routes/ncfSequence.routes');
+const creditDebitNoteRoutes = require('./routes/creditDebitNote.routes');
 
 const app = express();
 
@@ -206,6 +209,9 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/invoices", invoiceRoutes);
 app.use("/api/stripe", stripeRoutes);
+app.use("/api/company", companyRoutes);
+app.use("/api/ncf-sequences", ncfSequenceRoutes);
+app.use("/api/credit-debit-notes", creditDebitNoteRoutes);
 
 // Endpoint de salud del servidor
 app.get("/health", (req, res) => {
