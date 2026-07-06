@@ -311,7 +311,11 @@ export default function Settings() {
                       <td className="px-3 py-2 text-sm text-gray-500">{seq.remaining} / {seq.total}</td>
                       <td className="px-3 py-2 text-sm text-gray-500">{seq.expirationDate}</td>
                       <td className="px-3 py-2 text-sm">
-                        {seq.expired || seq.exhausted ? (
+                        {!seq.isActive ? (
+                          <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                            Inactivo
+                          </span>
+                        ) : seq.expired || seq.exhausted ? (
                           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
                             <ExclamationTriangleIcon className="h-3 w-3" />
                             {seq.expired ? "Vencido" : "Agotado"}
