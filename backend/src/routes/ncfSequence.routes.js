@@ -9,5 +9,6 @@ router.get("/", ncfSequenceController.getAll);
 router.get("/status", ncfSequenceController.getStatus);
 router.post("/", ncfSequenceController.create);
 router.put("/:id", ncfSequenceController.update);
+router.delete("/:id", ncfSequenceController.remove);
 
 module.exports = router;

@@ -117,18 +117,23 @@ async function updateSequence(id, data) {
     throw new NcfLimitError("Secuencia no encontrada");
   }
 
-  const { rangeStart, currentNumber } = data;
-  if (rangeStart !== undefined || currentNumber !== undefined) {
-    const newCurrent = currentNumber !== undefined ? Number(currentNumber) : Number(sequence.currentNumber);
-    if (newCurrent < Number(sequence.currentNumber) - 0 && currentNumber !== undefined) {
-      // Solo se permite ajustar hacia adelante para no reutilizar un número ya emitido
-      if (Number(currentNumber) < Number(sequence.currentNumber)) {
-        throw new NcfLimitError("No se puede retroceder el correlativo por debajo de lo ya emitido");
-      }
+  // rangeStart y ncfType no se pueden modificar una vez creada la secuencia: rangeStart define
+  // el punto de partida ya usado como referencia por los NCF emitidos.
+  if (data.rangeEnd !== undefined) {
+    const newRangeEnd = Number(data.rangeEnd);
+    if (newRangeEnd < Number(sequence.currentNumber) - 1) {
+      throw new NcfLimitError(
+        `No se puede reducir el rango por debajo de lo ya emitido (van ${Number(sequence.currentNumber) - Number(sequence.rangeStart)} comprobantes usados)`
+      );
     }
   }
 
+  if (data.expirationDate !== undefined && new Date(data.expirationDate) <= new Date()) {
+    throw new NcfLimitError("La fecha de vencimiento debe ser futura");
+  }
+
   await sequence.update({
+    rangeEnd: data.rangeEnd !== undefined ? data.rangeEnd : sequence.rangeEnd,
     expirationDate: data.expirationDate !== undefined ? data.expirationDate : sequence.expirationDate,
     isActive: data.isActive !== undefined ? data.isActive : sequence.isActive,
     alertThreshold: data.alertThreshold !== undefined ? data.alertThreshold : sequence.alertThreshold,
@@ -137,10 +142,28 @@ async function updateSequence(id, data) {
   return sequence;
 }
 
+async function deleteSequence(id) {
+  const sequence = await NcfSequence.findByPk(id);
+  if (!sequence) {
+    throw new NcfLimitError("Secuencia no encontrada");
+  }
+
+  // Una secuencia con al menos un NCF ya emitido no puede eliminarse: rompería la trazabilidad
+  // fiscal de las facturas/notas que ya la referencian. Solo se puede desactivar.
+  if (Number(sequence.currentNumber) > Number(sequence.rangeStart)) {
+    throw new NcfLimitError(
+      "Esta secuencia ya emitió comprobantes y no puede eliminarse (rompería la trazabilidad fiscal). Puedes desactivarla en su lugar."
+    );
+  }
+
+  await sequence.destroy();
+}
+
 module.exports = {
   getNextNcf,
   getSequenceStatus,
   createSequence,
   updateSequence,
+  deleteSequence,
   NcfLimitError,
 };

@@ -56,3 +56,21 @@ exports.update = async (req, res) => {
     res.status(500).json({ msg: "Error al actualizar secuencia NCF" });
   }
 };
+
+exports.remove = async (req, res) => {
+  try {
+    const { user } = req;
+    if (user.role !== "admin") {
+      return res.status(403).json({ msg: "Solo un administrador puede configurar secuencias NCF" });
+    }
+
+    await ncfService.deleteSequence(req.params.id);
+    res.json({ msg: "Secuencia eliminada" });
+  } catch (err) {
+    if (err.name === "NcfLimitError") {
+      return res.status(400).json({ msg: err.message });
+    }
+    console.error("Error al eliminar secuencia NCF:", err);
+    res.status(500).json({ msg: "Error al eliminar secuencia NCF" });
+  }
+};

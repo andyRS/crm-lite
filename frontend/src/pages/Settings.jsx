@@ -5,7 +5,9 @@ import {
   BuildingOfficeIcon,
   DocumentTextIcon,
   ExclamationTriangleIcon,
-  PlusIcon
+  PlusIcon,
+  PencilIcon,
+  TrashIcon
 } from "@heroicons/react/24/outline";
 import api from "../api/axios";
 import toast, { Toaster } from "react-hot-toast";
@@ -40,6 +42,8 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [showSequenceModal, setShowSequenceModal] = useState(false);
   const [sequenceForm, setSequenceForm] = useState(emptySequenceForm);
+  const [editingSequence, setEditingSequence] = useState(null);
+  const [editForm, setEditForm] = useState({ rangeEnd: "", expirationDate: "", alertThreshold: "", isActive: true });
 
   useEffect(() => {
     if (user && user.role !== "admin") {
@@ -98,6 +102,43 @@ export default function Settings() {
     } catch (err) {
       console.error("Error al crear rango NCF:", err);
       toast.error(err.response?.data?.msg || "Error al crear rango NCF");
+    }
+  };
+
+  const openEditModal = (seq) => {
+    setEditingSequence(seq);
+    setEditForm({
+      rangeEnd: seq.rangeEnd,
+      expirationDate: seq.expirationDate,
+      alertThreshold: seq.alertThreshold ?? 50,
+      isActive: seq.isActive,
+    });
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api.put(`/ncf-sequences/${editingSequence.id}`, editForm);
+      toast.success("Secuencia actualizada");
+      setEditingSequence(null);
+      loadSequences();
+    } catch (err) {
+      console.error("Error al actualizar secuencia NCF:", err);
+      toast.error(err.response?.data?.msg || "Error al actualizar secuencia NCF");
+    }
+  };
+
+  const handleDeleteSequence = async (seq) => {
+    if (!window.confirm(`¿Eliminar el rango ${seq.prefix}${seq.ncfType} (${seq.rangeStart}-${seq.rangeEnd})? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+    try {
+      await api.delete(`/ncf-sequences/${seq.id}`);
+      toast.success("Rango eliminado");
+      loadSequences();
+    } catch (err) {
+      console.error("Error al eliminar secuencia NCF:", err);
+      toast.error(err.response?.data?.msg || "Error al eliminar secuencia NCF");
     }
   };
 
@@ -257,6 +298,7 @@ export default function Settings() {
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Disponibles</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Vence</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -284,6 +326,29 @@ export default function Settings() {
                             Activo
                           </span>
                         )}
+                      </td>
+                      <td className="px-3 py-2 text-sm text-right">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => openEditModal(seq)}
+                            className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded"
+                            title="Editar rango"
+                          >
+                            <PencilIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSequence(seq)}
+                            disabled={seq.used > 0}
+                            title={seq.used > 0 ? "No se puede eliminar: ya emitió comprobantes" : "Eliminar rango"}
+                            className={`p-1.5 rounded ${
+                              seq.used > 0
+                                ? "text-gray-300 cursor-not-allowed"
+                                : "text-gray-500 hover:text-red-600 hover:bg-red-50"
+                            }`}
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -362,6 +427,82 @@ export default function Settings() {
                   className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
                 >
                   Crear rango
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal editar rango NCF */}
+      {editingSequence && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">
+              Editar rango {NCF_TYPE_LABELS[editingSequence.ncfType] || editingSequence.ncfType}
+            </h3>
+            <p className="text-xs text-gray-500 mb-4">
+              {editingSequence.prefix}{editingSequence.ncfType}{String(editingSequence.rangeStart).padStart(8, "0")} en adelante
+              {editingSequence.used > 0 && ` · ya emitió ${editingSequence.used} comprobante(s)`}
+            </p>
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Hasta (puede ampliarse, no reducirse por debajo de lo emitido)</label>
+                <input
+                  type="number"
+                  required
+                  min={editingSequence.currentNumber}
+                  value={editForm.rangeEnd}
+                  onChange={(e) => setEditForm({ ...editForm, rangeEnd: e.target.value })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Fecha de vencimiento</label>
+                <input
+                  type="date"
+                  required
+                  value={editForm.expirationDate}
+                  onChange={(e) => setEditForm({ ...editForm, expirationDate: e.target.value })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Alertar cuando queden (comprobantes)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editForm.alertThreshold}
+                  onChange={(e) => setEditForm({ ...editForm, alertThreshold: e.target.value })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border px-3 py-2 text-sm"
+                />
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={editForm.isActive}
+                  onChange={(e) => setEditForm({ ...editForm, isActive: e.target.checked })}
+                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                Rango activo (disponible para emitir NCF)
+              </label>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingSequence(null)}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+                >
+                  Guardar cambios
                 </button>
               </div>
             </form>
