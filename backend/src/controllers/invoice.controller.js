@@ -1,6 +1,24 @@
-const { Invoice, InvoiceItem, Customer, User, Product, Order } = require("../models");
+const { Invoice, InvoiceItem, Customer, User, Product, Order, OrderItem } = require("../models");
 const { Op } = require("sequelize");
+const { sequelize } = require("../config/db");
 const { createNotification, notifyManagers } = require("./notification.controller");
+const ncfService = require("../services/ncf.service");
+
+// Calcula retenciones informativas (ITBIS/ISR que el cliente le retendrá a esta pyme al pagar)
+const calculateRetentions = (subtotal, taxAmount, retentionApplies, itbisRetentionPercentage, isrRetentionPercentage) => {
+  if (!retentionApplies) {
+    return { itbisRetentionAmount: 0, isrRetentionAmount: 0 };
+  }
+
+  const itbisRetentionAmount = itbisRetentionPercentage
+    ? (taxAmount * parseFloat(itbisRetentionPercentage)) / 100
+    : 0;
+  const isrRetentionAmount = isrRetentionPercentage
+    ? (subtotal * parseFloat(isrRetentionPercentage)) / 100
+    : 0;
+
+  return { itbisRetentionAmount, isrRetentionAmount };
+};
 
 // Generar número de factura automático
 const generateInvoiceNumber = async () => {
@@ -123,24 +141,40 @@ exports.getById = async (req, res) => {
 
 // Crear una factura
 exports.create = async (req, res) => {
+  const transaction = await sequelize.transaction();
   try {
-    const { customer_id, items, invoiceDate, dueDate, taxRate, discountAmount, notes, paymentMethod, order_id } = req.body;
+    const {
+      customer_id, items, invoiceDate, dueDate, taxRate, discountAmount, notes, paymentMethod, order_id,
+      ncfType, retentionApplies, itbisRetentionPercentage, isrRetentionPercentage
+    } = req.body;
     const { user } = req;
 
     if (!customer_id || !items || items.length === 0) {
+      await transaction.rollback();
       return res.status(400).json({ msg: "Cliente y productos son obligatorios" });
     }
 
-    // Generar número de factura
+    const customer = await Customer.findByPk(customer_id, { transaction });
+    if (!customer) {
+      await transaction.rollback();
+      return res.status(404).json({ msg: "Cliente no encontrado" });
+    }
+
+    // Generar número de factura (identificador interno del sistema)
     const invoiceNumber = await generateInvoiceNumber();
+
+    // Tipo de comprobante NCF: si el cliente tiene RNC/taxId se asume Crédito Fiscal (02),
+    // si no, Consumidor Final (01). El usuario puede sobreescribirlo desde el formulario.
+    const resolvedNcfType = ncfType || (customer.taxId ? "02" : "01");
 
     // Calcular totales
     let subtotal = 0;
     const invoiceItems = [];
 
     for (const item of items) {
-      const product = await Product.findByPk(item.product_id);
+      const product = await Product.findByPk(item.product_id, { transaction });
       if (!product) {
+        await transaction.rollback();
         return res.status(404).json({ msg: `Producto con ID ${item.product_id} no encontrado` });
       }
 
@@ -158,6 +192,14 @@ exports.create = async (req, res) => {
     const taxAmount = (subtotal * parseFloat(taxRate || 18)) / 100;
     const total = subtotal + taxAmount - parseFloat(discountAmount || 0);
 
+    const { itbisRetentionAmount, isrRetentionAmount } = calculateRetentions(
+      subtotal, taxAmount, retentionApplies, itbisRetentionPercentage, isrRetentionPercentage
+    );
+    const netTotal = total - itbisRetentionAmount - isrRetentionAmount;
+
+    // Generar NCF dentro de la misma transacción: si algo falla después, no queda un número "quemado"
+    const { ncf, ncfSequenceId } = await ncfService.getNextNcf(resolvedNcfType, transaction);
+
     // Crear factura
     const invoice = await Invoice.create({
       invoiceNumber,
@@ -173,16 +215,28 @@ exports.create = async (req, res) => {
       total,
       status: 'pending',
       paymentMethod: paymentMethod || null,
-      notes: notes || null
-    });
+      notes: notes || null,
+      fiscalType: 'ncf',
+      ncfType: resolvedNcfType,
+      ncf,
+      ncfSequence_id: ncfSequenceId,
+      retentionApplies: !!retentionApplies,
+      itbisRetentionPercentage: retentionApplies ? itbisRetentionPercentage : null,
+      itbisRetentionAmount,
+      isrRetentionPercentage: retentionApplies ? isrRetentionPercentage : null,
+      isrRetentionAmount,
+      netTotal
+    }, { transaction });
 
     // Crear items de la factura
     for (const item of invoiceItems) {
       await InvoiceItem.create({
         invoice_id: invoice.id,
         ...item
-      });
+      }, { transaction });
     }
+
+    await transaction.commit();
 
     // Obtener la factura completa con relaciones
     const fullInvoice = await Invoice.findByPk(invoice.id, {
@@ -241,6 +295,12 @@ exports.create = async (req, res) => {
 
     res.status(201).json(fullInvoice);
   } catch (err) {
+    if (!transaction.finished) {
+      await transaction.rollback();
+    }
+    if (err.name === "NcfLimitError") {
+      return res.status(400).json({ msg: err.message });
+    }
     console.error("Error al crear factura:", err);
     res.status(500).json({ msg: "Error al crear factura" });
   }
@@ -262,6 +322,14 @@ exports.update = async (req, res) => {
 
     if (!invoice) {
       return res.status(404).json({ msg: "Factura no encontrada" });
+    }
+
+    // Un comprobante fiscal (NCF) ya emitido no puede cancelarse directamente por norma DGII;
+    // el ajuste debe hacerse vía nota de crédito/débito.
+    if (status === 'cancelled' && invoice.ncf) {
+      return res.status(400).json({
+        msg: "Esta factura ya tiene un NCF emitido y no puede cancelarse directamente. Emite una nota de crédito para anularla o ajustarla."
+      });
     }
 
     await invoice.update({
@@ -345,6 +413,13 @@ exports.remove = async (req, res) => {
       return res.status(404).json({ msg: "Factura no encontrada" });
     }
 
+    // DGII no permite borrar un comprobante fiscal ya emitido; solo facturas en borrador (sin NCF)
+    if (invoice.ncf) {
+      return res.status(400).json({
+        msg: "Esta factura ya tiene un NCF emitido y no puede eliminarse. Emite una nota de crédito para anularla."
+      });
+    }
+
     // Eliminar items primero
     await InvoiceItem.destroy({ where: { invoice_id: id } });
 
@@ -360,8 +435,9 @@ exports.remove = async (req, res) => {
 
 // Convertir pedido a factura
 exports.createFromOrder = async (req, res) => {
+  const transaction = await sequelize.transaction();
   try {
-    const { order_id } = req.body;
+    const { order_id, ncfType, retentionApplies, itbisRetentionPercentage, isrRetentionPercentage } = req.body;
     const { user } = req;
 
     const order = await Order.findByPk(order_id, {
@@ -369,22 +445,39 @@ exports.createFromOrder = async (req, res) => {
         {
           model: OrderItem,
           include: [Product]
-        }
-      ]
+        },
+        { model: Customer }
+      ],
+      transaction
     });
 
     if (!order) {
+      await transaction.rollback();
       return res.status(404).json({ msg: "Pedido no encontrado" });
     }
 
     // Verificar si ya existe una factura para este pedido
-    const existingInvoice = await Invoice.findOne({ where: { order_id } });
+    const existingInvoice = await Invoice.findOne({ where: { order_id }, transaction });
     if (existingInvoice) {
+      await transaction.rollback();
       return res.status(400).json({ msg: "Ya existe una factura para este pedido" });
     }
 
     // Generar número de factura
     const invoiceNumber = await generateInvoiceNumber();
+
+    const resolvedNcfType = ncfType || (order.Customer && order.Customer.taxId ? "02" : "01");
+
+    const subtotal = parseFloat(order.subtotal || order.total);
+    const taxAmount = parseFloat(order.taxAmount || 0);
+    const total = parseFloat(order.total);
+
+    const { itbisRetentionAmount, isrRetentionAmount } = calculateRetentions(
+      subtotal, taxAmount, retentionApplies, itbisRetentionPercentage, isrRetentionPercentage
+    );
+    const netTotal = total - itbisRetentionAmount - isrRetentionAmount;
+
+    const { ncf, ncfSequenceId } = await ncfService.getNextNcf(resolvedNcfType, transaction);
 
     // Crear factura basada en el pedido
     const invoice = await Invoice.create({
@@ -393,14 +486,24 @@ exports.createFromOrder = async (req, res) => {
       user_id: user.id,
       order_id: order.id,
       invoiceDate: new Date(),
-      subtotal: order.total,
+      subtotal,
       taxRate: 18,
-      taxAmount: 0,
+      taxAmount,
       discountAmount: 0,
-      total: order.total,
+      total,
       status: 'pending',
-      notes: `Generada desde pedido ${order.orderNumber}`
-    });
+      notes: `Generada desde pedido ${order.orderNumber}`,
+      fiscalType: 'ncf',
+      ncfType: resolvedNcfType,
+      ncf,
+      ncfSequence_id: ncfSequenceId,
+      retentionApplies: !!retentionApplies,
+      itbisRetentionPercentage: retentionApplies ? itbisRetentionPercentage : null,
+      itbisRetentionAmount,
+      isrRetentionPercentage: retentionApplies ? isrRetentionPercentage : null,
+      isrRetentionAmount,
+      netTotal
+    }, { transaction });
 
     // Crear items de la factura desde los items del pedido
     for (const item of order.OrderItems) {
@@ -410,8 +513,10 @@ exports.createFromOrder = async (req, res) => {
         quantity: item.quantity,
         price: item.price,
         total: item.total
-      });
+      }, { transaction });
     }
+
+    await transaction.commit();
 
     // Obtener la factura completa
     const fullInvoice = await Invoice.findByPk(invoice.id, {
@@ -434,6 +539,12 @@ exports.createFromOrder = async (req, res) => {
 
     res.status(201).json(fullInvoice);
   } catch (err) {
+    if (!transaction.finished) {
+      await transaction.rollback();
+    }
+    if (err.name === "NcfLimitError") {
+      return res.status(400).json({ msg: err.message });
+    }
     console.error("Error al crear factura desde pedido:", err);
     res.status(500).json({ msg: "Error al crear factura desde pedido" });
   }

@@ -10,6 +10,7 @@ import Invoices from "./pages/Invoices";
 import Notifications from "./pages/Notifications";
 import Quotes from "./pages/Quotes";
 import Reports from "./pages/Reports";
+import Settings from "./pages/Settings";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 export default function App() {
@@ -95,6 +96,15 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Notifications />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
             </ProtectedRoute>
           }
         />

@@ -50,8 +50,54 @@ const Invoice = sequelize.define(
       allowNull: false,
     },
     status: {
-      type: DataTypes.ENUM('draft', 'pending', 'paid', 'overdue', 'cancelled'),
+      type: DataTypes.ENUM('draft', 'pending', 'paid', 'overdue', 'cancelled', 'credited'),
       defaultValue: 'draft',
+    },
+    fiscalType: {
+      // 'ncf' = comprobante tradicional. 'ecf' = factura electrónica DGII (preparado para cuando aplique)
+      type: DataTypes.ENUM('ncf', 'ecf'),
+      defaultValue: 'ncf',
+      allowNull: false,
+    },
+    ncfType: {
+      // Catálogo DGII: 01 Consumidor Final, 02 Crédito Fiscal, 14 Régimen Especial, etc.
+      type: DataTypes.STRING(2),
+      allowNull: true,
+    },
+    ncf: {
+      type: DataTypes.STRING(19),
+      allowNull: true,
+      unique: true,
+    },
+    ncfSequence_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    retentionApplies: {
+      // Informativo: cuánto le retendrá el cliente (Estado/Gran Contribuyente) a esta pyme al pagar
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    itbisRetentionPercentage: {
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: true,
+    },
+    itbisRetentionAmount: {
+      type: DataTypes.DECIMAL(10, 2),
+      defaultValue: 0.00,
+    },
+    isrRetentionPercentage: {
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: true,
+    },
+    isrRetentionAmount: {
+      type: DataTypes.DECIMAL(10, 2),
+      defaultValue: 0.00,
+    },
+    netTotal: {
+      // Total menos retenciones informativas: lo que efectivamente cobra la pyme
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
     },
     paymentMethod: {
       type: DataTypes.ENUM('cash', 'card', 'transfer', 'check', 'other'),
